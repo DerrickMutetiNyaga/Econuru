@@ -4,6 +4,7 @@ import Order from '@/lib/models/Order';
 import { requireAuth } from '@/lib/auth';
 import { smsService } from '@/lib/sms';
 import Promotion from '@/lib/models/Promotion';
+import { applyLockedInPromotion, updatePromotionStatuses } from '@/lib/promotion-utils';
 
 // GET all orders
 export async function GET(request: NextRequest) {
@@ -31,11 +32,32 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Promo code logic
+    // Handle promotion logic - support both locked-in and regular promotions
     let promoCode = orderData.promoCode?.trim();
     let promoDiscount = 0;
-    if (promoCode) {
-      // Find active promotion
+    let promotionDetails = orderData.promotionDetails || null;
+    
+    // Auto-update promotion statuses first
+    await updatePromotionStatuses();
+    
+    if (promotionDetails && promotionDetails.lockedIn) {
+      // Use locked-in promotion (honors promotion even if expired/limit reached)
+      console.log(`🔒 Processing locked-in promotion: ${promotionDetails.promoCode}`);
+      const result = await applyLockedInPromotion(promotionDetails);
+      
+      if (result.success) {
+        promoCode = result.promoCode;
+        promoDiscount = result.promoDiscount;
+        console.log(`✅ Applied locked-in promotion: ${promoCode} - Discount: Ksh ${promoDiscount}`);
+      } else {
+        console.warn(`⚠️ Failed to apply locked-in promotion: ${result.error}`);
+        // Keep the locked-in details for future reference but don't apply discount
+        promoCode = promotionDetails.promoCode;
+        promoDiscount = 0;
+      }
+    } else if (promoCode) {
+      // Regular promotion validation (for backwards compatibility)
+      console.log(`🔍 Processing regular promotion: ${promoCode}`);
       const now = new Date();
       const promo = await Promotion.findOne({
         promoCode: { $regex: new RegExp(`^${promoCode}$`, 'i') },
@@ -47,9 +69,10 @@ export async function POST(request: NextRequest) {
       if (promo) {
         // Check if usage limit is exceeded
         if (promo.usageLimit && promo.usageCount >= promo.usageLimit) {
-          // Usage limit exceeded
+          console.warn(`⚠️ Promotion ${promoCode} usage limit exceeded`);
           promoCode = undefined;
           promoDiscount = 0;
+          promotionDetails = null;
         } else {
           // Calculate discount
           const orderTotal = orderData.totalAmount || 0;
@@ -70,11 +93,13 @@ export async function POST(request: NextRequest) {
           promo.usageCount = (promo.usageCount || 0) + 1;
           promo.updatedAt = new Date();
           await promo.save();
+          console.log(`✅ Applied regular promotion: ${promoCode} - Usage: ${promo.usageCount}/${promo.usageLimit}`);
         }
       } else {
-        // Invalid or expired promo
+        console.warn(`⚠️ Invalid or expired promo: ${promoCode}`);
         promoCode = undefined;
         promoDiscount = 0;
+        promotionDetails = null;
       }
     }
 
@@ -105,6 +130,7 @@ export async function POST(request: NextRequest) {
       orderNumber: generateOrderNumber(),
       promoCode: promoCode || '',
       promoDiscount: promoDiscount || 0,
+      promotionDetails: promotionDetails || undefined,
     });
 
     await order.save();

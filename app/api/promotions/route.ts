@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Promotion from '@/lib/models/Promotion';
 import { requireAdmin } from '@/lib/auth';
+import { updatePromotionStatuses } from '@/lib/promotion-utils';
 import { v2 as cloudinary } from 'cloudinary';
 
 cloudinary.config({
@@ -12,6 +13,11 @@ cloudinary.config({
 
 export async function GET() {
   await dbConnect();
+  
+  // Auto-update promotion statuses before fetching
+  console.log('🔄 Checking for promotion status updates...');
+  await updatePromotionStatuses();
+  
   const promotions = await Promotion.find().sort({ createdAt: -1 });
   return NextResponse.json({ success: true, promotions });
 }

@@ -166,6 +166,7 @@ export default function POSPage() {
   const [promoCode, setPromoCode] = useState("");
   const [promoDiscount, setPromoDiscount] = useState(0);
   const [promoError, setPromoError] = useState("");
+  const [lockedPromotion, setLockedPromotion] = useState(null); // Store locked-in promotion details
 
   // Add promo validation state
   const [promoValid, setPromoValid] = useState(null);
@@ -359,6 +360,12 @@ export default function POSPage() {
       paymentStatus: 'unpaid',
       laundryStatus: 'to-be-picked',
     });
+    // Clear promotion data
+    setPromoCode("");
+    setPromoDiscount(0);
+    setLockedPromotion(null);
+    setPromoValid(null);
+    setPromoMessage("");
   };
 
   // SMS Functions
@@ -616,6 +623,7 @@ Need help? Call us at +254 757 883 799`;
         laundryStatus: customerInfo.laundryStatus,
         status: isEditing ? "confirmed" : "pending",
         promoCode: promoCode.trim() || undefined,
+        promotionDetails: lockedPromotion || undefined,
       };
       const url = isEditing ? `/api/orders/${editingOrderId}` : '/api/orders';
       const method = isEditing ? 'PATCH' : 'POST';
@@ -662,9 +670,7 @@ Need help? Call us at +254 757 883 799`;
 
         setOrderSuccess(true);
         if (!isEditing) {
-          clearCart();
-          setPromoCode("");
-          setPromoDiscount(0);
+          clearCart(); // This now also clears promotion data
         }
         setSuccessDialogOpen(true);
       } else {
@@ -730,6 +736,13 @@ Need help? Call us at +254 757 883 799`;
             setSelectedLocation(order.location || 'main-branch');
             setPromoCode(order.promoCode || "");
             setPromoDiscount(order.promoDiscount || 0);
+            setLockedPromotion(order.promotionDetails || null);
+            
+            // If there's a locked promotion, mark it as valid
+            if (order.promotionDetails && order.promotionDetails.lockedIn) {
+              setPromoValid(true);
+              setPromoMessage(`Locked-in promotion: ${order.promotionDetails.promoCode}`);
+            }
           }
         } catch (error) {
           console.error('Error loading order for editing:', error);
@@ -752,33 +765,84 @@ Need help? Call us at +254 757 883 799`;
     }
   }, []);
 
+  // Lock in promotion function (called when promo is successfully validated)
+  const lockInPromotion = async (code, orderAmount) => {
+    try {
+      const response = await fetch('/api/promotions/lock-in', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          promoCode: code.trim(),
+          orderAmount: orderAmount
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.promotion) {
+        setLockedPromotion(data.promotion);
+        setPromoDiscount(data.promotion.calculatedDiscount);
+        setPromoValid(true);
+        setPromoMessage(`🔒 Promotion locked in! ${data.promotion.discountType === 'percentage' ? `${data.promotion.discount}% off` : `Ksh ${data.promotion.discount} off`} - Valid until order completion`);
+        console.log(`🔒 Locked in promotion: ${data.promotion.promoCode}`);
+        return data.promotion;
+      } else {
+        setLockedPromotion(null);
+        setPromoDiscount(0);
+        setPromoValid(false);
+        setPromoMessage(data.error || "Failed to lock in promotion");
+        return null;
+      }
+    } catch (error) {
+      console.error('Error locking in promotion:', error);
+      setLockedPromotion(null);
+      setPromoDiscount(0);
+      setPromoValid(false);
+      setPromoMessage("Error locking in promotion");
+      return null;
+    }
+  };
+
   // Promo code validation function
   const validatePromoCode = async (code) => {
     if (!code.trim()) {
       setPromoValid(null);
       setPromoMessage("");
       setPromoDiscount(0);
+      setLockedPromotion(null);
       return;
     }
+    
     setPromoLoading(true);
     try {
+      // If we already have a locked promotion for this code, keep it
+      if (lockedPromotion && lockedPromotion.promoCode.toLowerCase() === code.trim().toLowerCase()) {
+        setPromoValid(true);
+        setPromoMessage(`🔒 Promotion already locked in! ${lockedPromotion.discountType === 'percentage' ? `${lockedPromotion.discount}% off` : `Ksh ${lockedPromotion.discount} off`} - Valid until order completion`);
+        setPromoLoading(false);
+        return;
+      }
+      
+      // First validate the promo code normally
       const response = await fetch(`/api/promotions/validate?code=${encodeURIComponent(code.trim())}`);
       const data = await response.json();
+      
       if (data.success && data.promotion) {
-        setPromoValid(true);
-        setPromoDiscount(data.promotion.discountType === 'percentage'
-          ? Math.round((getCartTotal() * data.promotion.discount) / 100)
-          : data.promotion.discount
-        );
-        setPromoMessage(`Valid promo code! ${data.promotion.discountType === 'percentage' ? `${data.promotion.discount}% off` : `Ksh ${data.promotion.discount} off`}`);
+        // If validation succeeds, immediately lock it in
+        const orderAmount = getCartTotal();
+        await lockInPromotion(code, orderAmount);
       } else {
         setPromoValid(false);
         setPromoDiscount(0);
+        setLockedPromotion(null);
         setPromoMessage(data.error || "Invalid or expired promo code");
       }
     } catch (error) {
       setPromoValid(false);
       setPromoDiscount(0);
+      setLockedPromotion(null);
       setPromoMessage("Error validating promo code");
     } finally {
       setPromoLoading(false);
@@ -1182,22 +1246,60 @@ Need help? Call us at +254 757 883 799`;
 
                 {/* Promo Code */}
                 <div>
-                  <Label htmlFor="promoCode">Promo Code</Label>
-                  <Input
-                    id="promoCode"
-                    value={promoCode}
-                    onChange={e => setPromoCode(e.target.value)}
-                    placeholder="e.g. SAVE20"
-                    className={`luxury-input ${promoValid === true ? 'border-green-500 bg-green-50' : promoValid === false ? 'border-red-500 bg-red-50' : ''}`}
-                    autoComplete="off"
-                  />
-                  {promoLoading && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Loader2 className="h-4 w-4 animate-spin text-[#e2b15b]" />
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="promoCode">Promo Code</Label>
+                    {lockedPromotion && (
+                      <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+                        🔒 Locked In
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="promoCode"
+                      value={promoCode}
+                      onChange={e => setPromoCode(e.target.value)}
+                      placeholder="e.g. SAVE20"
+                      className={`luxury-input ${lockedPromotion ? 'border-green-500 bg-green-50' : promoValid === true ? 'border-green-500 bg-green-50' : promoValid === false ? 'border-red-500 bg-red-50' : ''}`}
+                      autoComplete="off"
+                      disabled={promoLoading}
+                    />
+                    {promoLoading && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="h-4 w-4 animate-spin text-[#e2b15b]" />
+                      </div>
+                    )}
+                    {lockedPromotion && !promoLoading && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <span className="text-green-600 text-lg">🔒</span>
+                      </div>
+                    )}
+                  </div>
+                  {promoMessage && (
+                    <div className={`text-xs mt-1 p-2 rounded-md ${lockedPromotion ? 'text-green-700 bg-green-50 border border-green-200' : promoValid === true ? 'text-green-600' : 'text-red-600'}`}>
+                      {promoMessage}
+                      {lockedPromotion && (
+                        <div className="mt-1 text-xs text-green-600">
+                          This promotion is locked in and will be honored even if it expires before order completion.
+                        </div>
+                      )}
                     </div>
                   )}
-                  {promoMessage && (
-                    <p className={`text-xs mt-1 ${promoValid === true ? 'text-green-600' : 'text-red-600'}`}>{promoMessage}</p>
+                  {lockedPromotion && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPromoCode("");
+                        setPromoDiscount(0);
+                        setLockedPromotion(null);
+                        setPromoValid(null);
+                        setPromoMessage("");
+                      }}
+                      className="mt-2 text-xs h-7"
+                    >
+                      Clear Promo
+                    </Button>
                   )}
                 </div>
 
@@ -1299,7 +1401,14 @@ Need help? Call us at +254 757 883 799`;
               {/* Promo Discount */}
               {promoDiscount > 0 && (
                 <div className="flex justify-between items-center">
-                  <span className="font-medium text-gray-700">Promo Discount:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-700">Promo Discount:</span>
+                    {lockedPromotion && (
+                      <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+                        🔒 Locked
+                      </Badge>
+                    )}
+                  </div>
                   <span className="text-lg font-semibold text-green-600">
                     -Ksh {promoDiscount.toLocaleString()}
                   </span>

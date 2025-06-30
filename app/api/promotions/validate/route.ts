@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Promotion from '@/lib/models/Promotion';
+import { updatePromotionStatuses } from '@/lib/promotion-utils';
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
+    
+    // Auto-update promotion statuses before validation
+    console.log('🔄 Auto-updating promotion statuses before validation...');
+    await updatePromotionStatuses();
     
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
@@ -16,7 +21,7 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Find active promotion
+    // Find active promotion (after status update)
     const now = new Date();
     const promotion = await Promotion.findOne({
       promoCode: { $regex: new RegExp(`^${code.trim()}$`, 'i') },
@@ -32,8 +37,10 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Check if usage limit is exceeded
+    // Check if usage limit is exceeded (should already be handled by auto-update, but double-check)
     if (promotion.usageLimit && promotion.usageCount >= promotion.usageLimit) {
+      // Update status to expired if not already
+      await Promotion.findByIdAndUpdate(promotion._id, { status: 'expired' });
       return NextResponse.json({ 
         success: false, 
         error: 'Promo code usage limit exceeded' 

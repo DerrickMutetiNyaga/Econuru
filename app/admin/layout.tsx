@@ -21,12 +21,18 @@ import {
   ChevronLeft,
   ChevronRight,
   Star,
+  CreditCard,
+  UserCog,
+  Receipt,
+  Image,
+  Folder,
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { useTheme } from "next-themes"
 import { useAuth } from "@/hooks/useAuth"
 import ProtectedRoute from "@/components/ProtectedRoute"
+import { getAccessibleNavigation } from "@/lib/permissions"
 
 function AdminLayoutContent({
   children,
@@ -82,24 +88,50 @@ function AdminLayoutContent({
     return <>{children}</>
   }
 
-  const navItems = [
-    { icon: LayoutDashboard, label: "Admin Overview", href: "/admin" },
-    { icon: LayoutDashboard, label: "Dashboard", href: "/admin/dashboard" },
-    { icon: ShoppingBag, label: "Orders", href: "/admin/orders" },
-    { icon: Users, label: "Clients", href: "/admin/clients" },
-    { icon: Users, label: "Employees", href: "/admin/employees" },
-    { icon: Tag, label: "Services", href: "/admin/services" },
-    { icon: Tag, label: "Promotions", href: "/admin/promotions" },
-    { icon: ImageIcon, label: "Banners", href: "/admin/banners" },
-    { icon: DollarSign, label: "Expenses", href: "/admin/expenses" },
-    { icon: ImageIcon, label: "Gallery", href: "/admin/gallery" },
-    { icon: BarChart, label: "Reports", href: "/admin/reports" },
-    { icon: Users, label: "User Management", href: "/admin/users" },
-    { icon: Calculator, label: "Laundry POS", href: "/admin/pos" },
-    { icon: MessageSquare, label: "Contact", href: "/admin/contact" },
-    { icon: Star, label: "Testimonials", href: "/admin/testimonials" },
-    { icon: Settings, label: "Settings", href: "/admin/settings" },
-  ]
+  // Icon mapping for navigation items
+  const iconMap = {
+    LayoutDashboard,
+    ShoppingBag,
+    Users,
+    CreditCard: Calculator,
+    Settings,
+    Folder: ImageIcon,
+    BarChart,
+    UserCog: Users,
+    Receipt: DollarSign,
+    Image: ImageIcon,
+    MessageSquare,
+    Tag,
+  }
+
+  // Get navigation items based on user permissions
+  const accessibleNavigation = getAccessibleNavigation(user)
+  
+  // Map accessible navigation to nav items with icons
+  const navItems = accessibleNavigation.map((item) => {
+    const IconComponent = iconMap[item.icon as keyof typeof iconMap] || Settings
+    return {
+      icon: IconComponent,
+      label: item.label,
+      href: item.path,
+      key: item.key
+    }
+  })
+
+  // Always show admin overview at the top if user has dashboard access
+  const hasNavItems = navItems.length > 0
+  if (hasNavItems && !navItems.find(item => item.href === '/admin')) {
+    // Add admin overview if user can access dashboard
+    const dashboardItem = navItems.find(item => item.key === 'dashboard')
+    if (dashboardItem) {
+      navItems.unshift({
+        icon: LayoutDashboard,
+        label: "Admin Overview", 
+        href: "/admin",
+        key: 'overview'
+      })
+    }
+  }
 
   const isActive = (href: string) => {
     return pathname === href || pathname.startsWith(`${href}/`)
@@ -157,24 +189,31 @@ function AdminLayoutContent({
 
                 {/* Mobile Navigation */}
                 <div className="flex-1 overflow-y-auto p-4">
-                  <nav className="space-y-2">
-                    {navItems.map((item) => (
-                      <Link key={item.href} href={item.href}>
-                        <Button
-                          variant="ghost"
-                          className={`w-full justify-start gap-3 h-12 text-left ${
-                            isActive(item.href)
-                              ? "bg-primary/10 text-primary border-r-2 border-primary hover:bg-mint-green hover:text-white hover:border-mint-green"
-                              : "hover:bg-mint-green-light hover:text-mint-green"
-                          }`}
-                          onClick={() => setIsMobileSidebarOpen(false)}
-                        >
-                          <item.icon className="h-5 w-5 flex-shrink-0" />
-                          <span className="font-medium">{item.label}</span>
-                        </Button>
-                      </Link>
-                    ))}
-                  </nav>
+                  {navItems.length > 0 ? (
+                    <nav className="space-y-2">
+                      {navItems.map((item) => (
+                        <Link key={item.href} href={item.href}>
+                          <Button
+                            variant="ghost"
+                            className={`w-full justify-start gap-3 h-12 text-left ${
+                              isActive(item.href)
+                                ? "bg-primary/10 text-primary border-r-2 border-primary hover:bg-mint-green hover:text-white hover:border-mint-green"
+                                : "hover:bg-mint-green-light hover:text-mint-green"
+                            }`}
+                            onClick={() => setIsMobileSidebarOpen(false)}
+                          >
+                            <item.icon className="h-5 w-5 flex-shrink-0" />
+                            <span className="font-medium">{item.label}</span>
+                          </Button>
+                        </Link>
+                      ))}
+                    </nav>
+                  ) : (
+                    <div className="text-center text-gray-500 py-8">
+                      <p className="text-sm">No accessible pages</p>
+                      <p className="text-xs mt-1">Contact administrator for access</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Mobile Footer */}
@@ -241,24 +280,38 @@ function AdminLayoutContent({
 
           {/* Desktop Navigation */}
           <div className="flex-1 overflow-y-auto p-4">
-            <nav className="space-y-2">
-              {navItems.map((item) => (
-                <Link key={item.href} href={item.href}>
-                  <Button
-                    variant="ghost"
-                    className={`w-full justify-start gap-3 h-12 text-left group ${
-                      isActive(item.href)
-                        ? "bg-primary/10 text-primary border-r-2 border-primary hover:bg-mint-green hover:text-white hover:border-mint-green"
-                        : "hover:bg-mint-green-light hover:text-mint-green"
-                    }`}
-                    title={isCollapsed ? item.label : undefined}
-                  >
-                    <item.icon className="h-5 w-5 flex-shrink-0" />
-                    {!isCollapsed && <span className="font-medium">{item.label}</span>}
-                  </Button>
-                </Link>
-              ))}
-            </nav>
+            {navItems.length > 0 ? (
+              <nav className="space-y-2">
+                {navItems.map((item) => (
+                  <Link key={item.href} href={item.href}>
+                    <Button
+                      variant="ghost"
+                      className={`w-full justify-start gap-3 h-12 text-left group ${
+                        isActive(item.href)
+                          ? "bg-primary/10 text-primary border-r-2 border-primary hover:bg-mint-green hover:text-white hover:border-mint-green"
+                          : "hover:bg-mint-green-light hover:text-mint-green"
+                      }`}
+                      title={isCollapsed ? item.label : undefined}
+                    >
+                      <item.icon className="h-5 w-5 flex-shrink-0" />
+                      {!isCollapsed && <span className="font-medium">{item.label}</span>}
+                    </Button>
+                  </Link>
+                ))}
+              </nav>
+            ) : (
+              <div className={`text-center text-gray-500 py-8 ${isCollapsed ? 'px-2' : ''}`}>
+                {!isCollapsed && (
+                  <>
+                    <p className="text-sm">No accessible pages</p>
+                    <p className="text-xs mt-1">Contact administrator for access</p>
+                  </>
+                )}
+                {isCollapsed && (
+                  <div className="w-5 h-5 bg-gray-300 rounded mx-auto" title="No accessible pages" />
+                )}
+              </div>
+            )}
           </div>
 
           {/* Desktop Footer */}
@@ -317,6 +370,9 @@ function AdminLayoutContent({
                   <span>Welcome,</span>
                   <span className="font-medium text-gray-900">
                     {user?.name || user?.email || "Admin"}
+                  </span>
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                    {user?.role}
                   </span>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">

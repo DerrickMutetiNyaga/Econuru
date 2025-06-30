@@ -3,12 +3,21 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
+interface IPagePermission {
+  page: string;
+  canView: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
 interface User {
   id: string;
   name: string;
   email: string;
   role: 'superadmin' | 'admin' | 'user';
   isActive: boolean;
+  approved: boolean;
+  pagePermissions: IPagePermission[];
 }
 
 interface AuthContextType {
@@ -75,9 +84,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { 
           success: true, 
           user: data.user,
-          message: data.user.role === 'admin' || data.user.role === 'superadmin' 
-            ? 'Login successful! Redirecting to admin panel...' 
-            : 'Login successful!'
+          message: data.message || (
+            data.user.role === 'admin' || data.user.role === 'superadmin' 
+              ? 'Login successful! Redirecting to admin panel...' 
+              : 'Login successful!'
+          )
         };
       } else {
         if (data.error === 'pending_approval') {

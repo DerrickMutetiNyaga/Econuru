@@ -26,6 +26,16 @@ export interface IOrder extends mongoose.Document {
   status: 'pending' | 'confirmed' | 'in-progress' | 'ready' | 'delivered' | 'cancelled';
   promoCode?: string;
   promoDiscount?: number;
+  promotionDetails?: {
+    promotionId: string;
+    promoCode: string;
+    discount: number;
+    discountType: 'percentage' | 'fixed';
+    minOrderAmount: number;
+    maxDiscount: number;
+    appliedAt: Date;
+    lockedIn: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -127,6 +137,25 @@ const orderSchema = new mongoose.Schema<IOrder>({
   promoDiscount: {
     type: Number,
     min: 0,
+  },
+  promotionDetails: {
+    promotionId: String,
+    promoCode: String,
+    discount: Number,
+    discountType: {
+      type: String,
+      enum: ['percentage', 'fixed']
+    },
+    minOrderAmount: Number,
+    maxDiscount: Number,
+    appliedAt: {
+      type: Date,
+      default: Date.now
+    },
+    lockedIn: {
+      type: Boolean,
+      default: false
+    }
   },
 }, {
   timestamps: true,

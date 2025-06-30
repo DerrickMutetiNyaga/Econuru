@@ -48,23 +48,41 @@ function AdminLoginForm() {
     setError("")
     setSuccess("") // Clear success message when attempting login
 
-    const result = await login(email, password)
-    
-    if (result.success) {
-      // Check if the logged-in user has admin privileges
-      if (result.user && (result.user.role === 'admin' || result.user.role === 'superadmin')) {
-        setSuccess(result.message || "Login successful! Redirecting to admin panel...")
-        router.push("/admin")
+    try {
+      // Use dedicated admin login API
+      const response = await fetch('/api/auth/admin-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Store auth data
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('authUser', JSON.stringify(data.user));
+        
+        setSuccess(data.message || "Login successful! Redirecting to admin panel...")
+        
+        // Use setTimeout to ensure the success message is shown briefly
+        setTimeout(() => {
+          router.push("/admin")
+        }, 1000)
       } else {
-        setError("Access denied. Admin privileges required for this area.")
-        // Clear the auth data since user is not admin
-        localStorage.removeItem('authToken')
-        localStorage.removeItem('authUser')
+        // Handle different types of errors
+        if (response.status === 403) {
+          setError(data.error || "Access denied. This area is restricted to administrators only.")
+        } else if (response.status === 401) {
+          setError("Invalid email or password.")
+        } else {
+          setError(data.error || "Login failed. Please try again.")
+        }
       }
-    } else if (result.pendingApproval) {
-      router.push("/pending-approval")
-    } else {
-      setError(result.error || "Login failed")
+    } catch (error) {
+      setError("Network error. Please check your connection and try again.")
     }
     
     setIsLoading(false)

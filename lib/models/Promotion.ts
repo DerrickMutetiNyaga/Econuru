@@ -15,6 +15,7 @@ export interface IPromotion extends Document {
   minOrderAmount: number;
   maxDiscount: number;
   createdBy: mongoose.Types.ObjectId;
+  updatedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +35,7 @@ const PromotionSchema: Schema = new Schema({
   minOrderAmount: { type: Number, required: true },
   maxDiscount: { type: Number, required: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

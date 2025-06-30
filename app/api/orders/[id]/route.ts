@@ -3,6 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
 import { requireAuth } from '@/lib/auth';
 import { smsService } from '@/lib/sms';
+import { applyLockedInPromotion, updatePromotionStatuses } from '@/lib/promotion-utils';
 
 // PATCH update order
 export const PATCH = requireAuth(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -24,10 +25,35 @@ export const PATCH = requireAuth(async (request: NextRequest, { params }: { para
     const previousStatus = existingOrder.status;
     const previousLaundryStatus = existingOrder.laundryStatus;
 
+    // Handle promotion updates if present
+    let finalUpdateData = { ...updateData };
+    
+    // If updating with promotion details, ensure locked-in promotions are honored
+    if (updateData.promotionDetails && updateData.promotionDetails.lockedIn) {
+      console.log(`🔒 Updating order ${orderId} with locked-in promotion: ${updateData.promotionDetails.promoCode}`);
+      
+      // Auto-update promotion statuses first
+      await updatePromotionStatuses();
+      
+      // Apply the locked-in promotion
+      const result = await applyLockedInPromotion(updateData.promotionDetails);
+      
+      if (result.success) {
+        finalUpdateData.promoCode = result.promoCode;
+        finalUpdateData.promoDiscount = result.promoDiscount;
+        console.log(`✅ Applied locked-in promotion to order ${orderId}: ${result.promoCode} - Discount: Ksh ${result.promoDiscount}`);
+      } else {
+        console.warn(`⚠️ Failed to apply locked-in promotion to order ${orderId}: ${result.error}`);
+        // Keep the locked-in details for future reference but don't apply discount
+        finalUpdateData.promoCode = updateData.promotionDetails.promoCode;
+        finalUpdateData.promoDiscount = 0;
+      }
+    }
+
     // Update the order
     const updatedOrder = await Order.findByIdAndUpdate(
       orderId,
-      updateData,
+      finalUpdateData,
       { new: true, runValidators: true }
     );
 

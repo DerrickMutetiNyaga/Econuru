@@ -18,6 +18,9 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  RefreshCw,
+  AlertTriangle,
+  TrendingUp,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -59,6 +62,8 @@ export default function PromotionsPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [promotionToDelete, setPromotionToDelete] = useState<any>(null)
+  const [updating, setUpdating] = useState(false)
+  const [updateMessage, setUpdateMessage] = useState("")
   const [form, setForm] = useState({
     title: "",
     promoCode: "",
@@ -94,10 +99,36 @@ export default function PromotionsPage() {
 
   async function fetchPromotions() {
     setLoading(true)
-    const res = await fetch("/api/promotions")
-    const data = await res.json()
-    setPromotions(data.promotions || [])
-    setLoading(false)
+    try {
+      const res = await fetch("/api/promotions")
+      const data = await res.json()
+      setPromotions(data.promotions || [])
+    } catch (error) {
+      console.error('Error fetching promotions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Manual status update function
+  async function handleUpdateStatuses() {
+    setUpdating(true)
+    setUpdateMessage("")
+    try {
+      // Trigger a fetch which will auto-update statuses on the server
+      const res = await fetch("/api/promotions")
+      const data = await res.json()
+      setPromotions(data.promotions || [])
+      setUpdateMessage("✅ Promotion statuses updated successfully!")
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setUpdateMessage(""), 3000)
+    } catch (error) {
+      setUpdateMessage("❌ Failed to update promotion statuses")
+      setTimeout(() => setUpdateMessage(""), 3000)
+    } finally {
+      setUpdating(false)
+    }
   }
 
   function handleFormChange(e: any) {
@@ -360,6 +391,43 @@ export default function PromotionsPage() {
     })
   }
 
+  // Check if promotion needs status update (client-side validation)
+  const getPromotionStatusInfo = (promotion: any) => {
+    const now = new Date();
+    const startDate = new Date(promotion.startDate);
+    const endDate = new Date(promotion.endDate);
+    
+    const usagePercentage = (promotion.usageCount / promotion.usageLimit) * 100;
+    const isUsageLimitReached = promotion.usageCount >= promotion.usageLimit;
+    const isBeforeStart = now < startDate;
+    const isAfterEnd = now > endDate;
+    const isInTimeRange = now >= startDate && now <= endDate;
+    
+    let suggestedStatus = promotion.status;
+    if (isUsageLimitReached) {
+      suggestedStatus = 'expired';
+    } else if (isAfterEnd) {
+      suggestedStatus = 'expired';
+    } else if (isInTimeRange) {
+      suggestedStatus = 'active';
+    } else if (isBeforeStart) {
+      suggestedStatus = 'scheduled';
+    }
+    
+    return {
+      currentStatus: promotion.status,
+      suggestedStatus,
+      usagePercentage: Math.round(usagePercentage),
+      isUsageLimitReached,
+      isBeforeStart,
+      isAfterEnd,
+      isInTimeRange,
+      daysUntilStart: isBeforeStart ? Math.ceil((startDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0,
+      daysUntilEnd: isInTimeRange ? Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0,
+      statusMismatch: promotion.status !== suggestedStatus
+    };
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -369,6 +437,10 @@ export default function PromotionsPage() {
           <p className="text-text-light">Create and manage promotional campaigns and discount codes</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
+          <Button variant="outline" className="rounded-xl" onClick={handleUpdateStatuses} disabled={updating}>
+            <RefreshCw className={`mr-2 w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
+            {updating ? 'Updating...' : 'Update Statuses'}
+          </Button>
           <Button variant="outline" className="rounded-xl" onClick={handleExportPromotions}>
             <Download className="mr-2 w-4 h-4" />
             Export
@@ -461,6 +533,13 @@ export default function PromotionsPage() {
           </Dialog>
         </div>
       </div>
+
+      {/* Update Status Message */}
+      {updateMessage && (
+        <div className={`p-4 rounded-xl ${updateMessage.includes('✅') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+          {updateMessage}
+        </div>
+      )}
 
       {/* Edit Promotion Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
@@ -565,7 +644,7 @@ export default function PromotionsPage() {
       </Dialog>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         <Card className="luxury-card">
           <CardContent className="p-6">
             <div className="text-center">
@@ -595,6 +674,19 @@ export default function PromotionsPage() {
             <div className="text-center">
               <p className="text-2xl font-bold">{promotions.reduce((sum, p) => sum + p.usageCount, 0)}</p>
               <p className="text-sm text-text-light">Total Usage</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="luxury-card">
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-orange-600">
+                {promotions.filter((p) => getPromotionStatusInfo(p).statusMismatch).length}
+              </p>
+              <p className="text-sm text-text-light">Need Update</p>
+              {promotions.filter((p) => getPromotionStatusInfo(p).statusMismatch).length > 0 && (
+                <AlertTriangle className="w-4 h-4 text-orange-600 mx-auto mt-1" />
+              )}
             </div>
           </CardContent>
         </Card>
@@ -705,10 +797,48 @@ export default function PromotionsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={`${getStatusColor(promotion.status)} flex items-center gap-1 w-fit`}>
-                        {getStatusIcon(promotion.status)}
-                        <span className="capitalize">{promotion.status}</span>
-                      </Badge>
+                      <div className="flex flex-col gap-1">
+                        <Badge className={`${getStatusColor(promotion.status)} flex items-center gap-1 w-fit`}>
+                          {getStatusIcon(promotion.status)}
+                          <span className="capitalize">{promotion.status}</span>
+                        </Badge>
+                        {(() => {
+                          const statusInfo = getPromotionStatusInfo(promotion);
+                          if (statusInfo.statusMismatch) {
+                            return (
+                              <div className="flex items-center gap-1 text-xs text-orange-600">
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>Should be {statusInfo.suggestedStatus}</span>
+                              </div>
+                            );
+                          }
+                          if (statusInfo.isInTimeRange && statusInfo.usagePercentage > 80) {
+                            return (
+                              <div className="flex items-center gap-1 text-xs text-blue-600">
+                                <TrendingUp className="w-3 h-3" />
+                                <span>{statusInfo.usagePercentage}% used</span>
+                              </div>
+                            );
+                          }
+                          if (statusInfo.isInTimeRange && statusInfo.daysUntilEnd <= 3) {
+                            return (
+                              <div className="flex items-center gap-1 text-xs text-yellow-600">
+                                <Clock className="w-3 h-3" />
+                                <span>{statusInfo.daysUntilEnd} days left</span>
+                              </div>
+                            );
+                          }
+                          if (statusInfo.isBeforeStart && statusInfo.daysUntilStart <= 7) {
+                            return (
+                              <div className="flex items-center gap-1 text-xs text-blue-600">
+                                <Clock className="w-3 h-3" />
+                                <span>Starts in {statusInfo.daysUntilStart} days</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
