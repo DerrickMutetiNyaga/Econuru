@@ -31,7 +31,7 @@ export default function ProtectedRoute({
     if (path.startsWith('/admin/clients')) return 'customers';
     if (path.startsWith('/admin/services-updated')) return 'services';
     if (path.startsWith('/admin/services')) return 'services';
-    if (path.startsWith('/admin/categories')) return 'categories';
+    if (path.startsWith('/admin/categories')) return 'services'; // Categories are now part of services
     if (path.startsWith('/admin/reports')) return 'reports';
     if (path.startsWith('/admin/users')) return 'users';
     if (path.startsWith('/admin/expenses')) return 'expenses';

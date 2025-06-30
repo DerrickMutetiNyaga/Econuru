@@ -158,7 +158,6 @@ export const ADMIN_PAGES = {
   pos: { label: 'POS', icon: 'CreditCard', path: '/admin/pos' },
   customers: { label: 'Customers', icon: 'Users', path: '/admin/clients' },
   services: { label: 'Services', icon: 'Settings', path: '/admin/services' },
-  categories: { label: 'Categories', icon: 'Folder', path: '/admin/categories' },
   reports: { label: 'Reports', icon: 'BarChart', path: '/admin/reports' },
   users: { label: 'User Management', icon: 'UserCog', path: '/admin/users' },
   expenses: { label: 'Expenses', icon: 'Receipt', path: '/admin/expenses' },
