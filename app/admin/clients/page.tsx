@@ -16,6 +16,13 @@ import {
   MapPin,
   User,
   RefreshCw,
+  MessageSquare,
+  Send,
+  Users,
+  UserPlus,
+  ChevronDown,
+  X,
+  Check,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -33,6 +40,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Separator } from "@/components/ui/separator"
+import { toast } from "@/hooks/use-toast"
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -52,6 +64,16 @@ export default function ClientsPage() {
   const fileDownloadRef = useRef(null)
   const [submitting, setSubmitting] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  
+  // Messaging state
+  const [showMessageDialog, setShowMessageDialog] = useState(false)
+  const [messageType, setMessageType] = useState<'all' | 'new' | 'specific'>('all')
+  const [messageContent, setMessageContent] = useState('')
+  const [selectedClients, setSelectedClients] = useState<string[]>([])
+  const [sendingMessage, setSendingMessage] = useState(false)
+  const [messageSentCount, setMessageSentCount] = useState(0)
+  const [messageFailedCount, setMessageFailedCount] = useState(0)
+  const [sendingComplete, setSendingComplete] = useState(false)
 
   useEffect(() => {
     async function fetchClients() {
@@ -135,6 +157,8 @@ export default function ClientsPage() {
         
         // Assign status and format data
         const now = new Date()
+        const twoWeeksAgo = new Date()
+        twoWeeksAgo.setDate(now.getDate() - 14) // 2 weeks = 14 days
         const thisMonth = now.getMonth()
         const thisYear = now.getFullYear()
         const thisYM = `${thisYear}-${thisMonth}`
@@ -143,7 +167,7 @@ export default function ClientsPage() {
           const join = new Date(c.joinDate)
           if (c.monthlySpent[thisYM] > 20000) {
             c.status = 'vip'
-          } else if (join.getMonth() === thisMonth && join.getFullYear() === thisYear) {
+          } else if (join >= twoWeeksAgo) {
             c.status = 'new'
           } else if (c.totalSpent > 1000) {
             c.status = 'premium'
@@ -317,6 +341,146 @@ export default function ClientsPage() {
     })
   }
 
+  // Messaging functions
+  function openMessageDialog(type: 'all' | 'new' | 'specific') {
+    setMessageType(type)
+    setShowMessageDialog(true)
+    setSelectedClients([])
+    setMessageContent('')
+    setError('')
+    setMessageSentCount(0)
+    setMessageFailedCount(0)
+    setSendingComplete(false)
+  }
+
+  function toggleClientSelection(clientId: string) {
+    setSelectedClients(prev => 
+      prev.includes(clientId) 
+        ? prev.filter(id => id !== clientId)
+        : [...prev, clientId]
+    )
+  }
+
+  function selectAllClients() {
+    const allClientIds = filteredClients.map(client => client.id)
+    setSelectedClients(allClientIds)
+  }
+
+  function deselectAllClients() {
+    setSelectedClients([])
+  }
+
+  async function sendMessage() {
+    if (!messageContent.trim()) {
+      setError('Please enter a message')
+      return
+    }
+
+    setSendingMessage(true)
+    setError('')
+    setMessageSentCount(0)
+    setMessageFailedCount(0)
+
+    let targetClients = []
+
+    switch (messageType) {
+      case 'all':
+        targetClients = clients.filter(client => client.phone)
+        break
+      case 'new':
+        targetClients = clients.filter(client => client.status === 'new' && client.phone)
+        break
+      case 'specific':
+        targetClients = clients.filter(client => selectedClients.includes(client.id) && client.phone)
+        break
+    }
+
+    if (targetClients.length === 0) {
+      setError('No clients selected or no phone numbers available')
+      setSendingMessage(false)
+      return
+    }
+
+    let sent = 0
+    let failed = 0
+
+    // Send messages one by one to avoid rate limiting
+    for (const client of targetClients) {
+      try {
+        const response = await fetch('/api/sms', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            mobile: client.phone,
+            message: messageContent,
+            type: 'custom'
+          })
+        })
+
+        const data = await response.json()
+        
+        if (data.success) {
+          sent++
+        } else {
+          failed++
+          console.error(`Failed to send to ${client.fullName}:`, data.error)
+        }
+      } catch (error) {
+        failed++
+        console.error(`Error sending to ${client.fullName}:`, error)
+      }
+
+      // Update counters in real-time
+      setMessageSentCount(sent)
+      setMessageFailedCount(failed)
+
+      // Small delay to avoid overwhelming the SMS service
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+
+    setSendingMessage(false)
+    setSendingComplete(true)
+
+    // Show completion toast
+    if (sent > 0) {
+      toast({
+        title: "Messages Sent",
+        description: `Successfully sent ${sent} message(s). ${failed > 0 ? `${failed} failed.` : ''}`,
+      })
+    }
+
+    if (failed === targetClients.length) {
+      setError('All messages failed to send. Please check your SMS configuration.')
+    }
+
+    // Auto-close modal after 3 seconds
+    setTimeout(() => {
+      setShowMessageDialog(false)
+      // Reset states when closing
+      setSendingComplete(false)
+      setMessageSentCount(0)
+      setMessageFailedCount(0)
+      setError('')
+    }, 3000)
+  }
+
+  function getMessageTargetInfo() {
+    switch (messageType) {
+      case 'all':
+        const allWithPhone = clients.filter(client => client.phone).length
+        return `All clients with phone numbers (${allWithPhone})`
+      case 'new':
+        const newWithPhone = clients.filter(client => client.status === 'new' && client.phone).length
+        return `New clients (last 2 weeks) (${newWithPhone})`
+      case 'specific':
+        return `Selected clients (${selectedClients.length})`
+      default:
+        return ''
+    }
+  }
+
   // Edit client functions
   function openEditDialog(client: any) {
     setEditingClient(client)
@@ -435,6 +599,45 @@ export default function ClientsPage() {
             <RefreshCw className={`mr-2 w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Syncing...' : 'Sync'}
           </Button>
+          
+          {/* Message Clients Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="rounded-xl">
+                <MessageSquare className="mr-2 w-4 h-4" />
+                Message Clients
+                <ChevronDown className="ml-2 w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => openMessageDialog('all')}>
+                <Users className="mr-2 w-4 h-4" />
+                <div className="flex flex-col">
+                  <span>All Clients</span>
+                  <span className="text-xs text-gray-500">
+                    {clients.filter(client => client.phone).length} with phone numbers
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openMessageDialog('new')}>
+                <UserPlus className="mr-2 w-4 h-4" />
+                <div className="flex flex-col">
+                  <span>New Clients</span>
+                  <span className="text-xs text-gray-500">
+                    {clients.filter(client => client.status === 'new' && client.phone).length} joined in last 2 weeks
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openMessageDialog('specific')}>
+                <User className="mr-2 w-4 h-4" />
+                <div className="flex flex-col">
+                  <span>Specific Clients</span>
+                  <span className="text-xs text-gray-500">Select individual clients</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
           <Button className="bg-accent hover:bg-accent/90 text-white rounded-xl" onClick={() => setShowAddDialog(true)}>
             <Plus className="mr-2 w-4 h-4" />
             Add Client
@@ -472,7 +675,7 @@ export default function ClientsPage() {
           <CardContent className="p-6">
             <div className="text-center">
               <p className="text-2xl font-bold">{clients.filter((c) => c.status === "new").length}</p>
-              <p className="text-sm text-text-light">New This Month</p>
+              <p className="text-sm text-text-light">New in 2 Weeks</p>
             </div>
           </CardContent>
         </Card>
@@ -533,9 +736,16 @@ export default function ClientsPage() {
                         <Phone className="mr-2 w-4 h-4" />
                         Call Client
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Mail className="mr-2 w-4 h-4" />
-                        SMS Client
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          setMessageType('specific')
+                          setSelectedClients([client.id])
+                          setShowMessageDialog(true)
+                        }}
+                        disabled={!client.phone}
+                      >
+                        <MessageSquare className="mr-2 w-4 h-4" />
+                        Message Client
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className={`text-red-600 ${!client.isFromDatabase ? "opacity-50 cursor-not-allowed" : ""}`}
@@ -566,9 +776,42 @@ export default function ClientsPage() {
           </div>
           {/* Desktop: Table */}
           <div className="hidden md:block overflow-x-auto">
+            {messageType === 'specific' && showMessageDialog && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-blue-800">
+                    Select clients to message ({selectedClients.length} selected)
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={selectAllClients}>
+                      <Check className="w-4 h-4 mr-1" />
+                      Select All
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={deselectAllClients}>
+                      <X className="w-4 h-4 mr-1" />
+                      Clear All
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             <Table>
               <TableHeader>
                 <TableRow>
+                  {messageType === 'specific' && showMessageDialog && (
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedClients.length === filteredClients.length && filteredClients.length > 0}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            selectAllClients()
+                          } else {
+                            deselectAllClients()
+                          }
+                        }}
+                      />
+                    </TableHead>
+                  )}
                   <TableHead>Client No</TableHead>
                   <TableHead>Full Name</TableHead>
                   <TableHead>Phone</TableHead>
@@ -587,6 +830,15 @@ export default function ClientsPage() {
                     transition={{ duration: 0.3, delay: index * 0.05 }}
                     className="hover:bg-secondary/50"
                   >
+                    {messageType === 'specific' && showMessageDialog && (
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedClients.includes(client.id)}
+                          onCheckedChange={() => toggleClientSelection(client.id)}
+                          disabled={!client.phone}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="font-medium">{client.clientNo}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -736,8 +988,16 @@ export default function ClientsPage() {
                                     <Edit className="mr-2 w-4 h-4" />
                                     Edit Client
                                   </Button>
-                                  <Button className="bg-accent hover:bg-accent/90 text-white rounded-xl">
-                                    <Mail className="mr-2 w-4 h-4" />
+                                  <Button 
+                                    className="bg-accent hover:bg-accent/90 text-white rounded-xl"
+                                    onClick={() => {
+                                      setMessageType('specific')
+                                      setSelectedClients([selectedClient.id])
+                                      setShowMessageDialog(true)
+                                    }}
+                                    disabled={!selectedClient?.phone}
+                                  >
+                                    <MessageSquare className="mr-2 w-4 h-4" />
                                     Send Message
                                   </Button>
                                 </div>
@@ -760,9 +1020,16 @@ export default function ClientsPage() {
                               <Phone className="mr-2 w-4 h-4" />
                               Call Client
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Mail className="mr-2 w-4 h-4" />
-                              SMS Client
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                setMessageType('specific')
+                                setSelectedClients([client.id])
+                                setShowMessageDialog(true)
+                              }}
+                              disabled={!client.phone}
+                            >
+                              <MessageSquare className="mr-2 w-4 h-4" />
+                              Message Client
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-red-600" onClick={() => openDeleteDialog(client)}>
                               <Trash2 className="mr-2 w-4 h-4" />
@@ -936,6 +1203,195 @@ export default function ClientsPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Message Clients Dialog */}
+      <Dialog 
+        open={showMessageDialog} 
+        onOpenChange={(open) => {
+          if (!open) {
+            // Reset states when dialog is closed
+            setSendingComplete(false)
+            setMessageSentCount(0)
+            setMessageFailedCount(0)
+            setError('')
+          }
+          setShowMessageDialog(open)
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              Message Clients
+            </DialogTitle>
+            <DialogDescription>
+              Send SMS messages to your clients. Target: {getMessageTargetInfo()}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Message Type Indicator */}
+            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                {messageType === 'all' && <Users className="w-5 h-5 text-blue-600" />}
+                {messageType === 'new' && <UserPlus className="w-5 h-5 text-green-600" />}
+                {messageType === 'specific' && <User className="w-5 h-5 text-purple-600" />}
+                                 <span className="font-medium">
+                   {messageType === 'all' && 'All Clients'}
+                   {messageType === 'new' && 'New Clients (Last 2 Weeks)'}
+                   {messageType === 'specific' && 'Specific Clients'}
+                 </span>
+              </div>
+              <div className="text-sm text-gray-600">
+                {getMessageTargetInfo()}
+              </div>
+            </div>
+
+            {/* Message Content */}
+            <div className="space-y-2">
+              <Label htmlFor="message">Message Content</Label>
+              <Textarea
+                id="message"
+                placeholder="Type your message here..."
+                value={messageContent}
+                onChange={(e) => setMessageContent(e.target.value)}
+                rows={4}
+                className="resize-none"
+              />
+              <div className="text-right text-sm text-gray-500">
+                {messageContent.length}/160 characters
+              </div>
+            </div>
+
+            {/* Client Selection for Specific Mode */}
+            {messageType === 'specific' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label>Select Clients ({selectedClients.length} selected)</Label>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={selectAllClients}>
+                      <Check className="w-4 h-4 mr-1" />
+                      Select All
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={deselectAllClients}>
+                      <X className="w-4 h-4 mr-1" />
+                      Clear All
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="max-h-40 overflow-y-auto border rounded-lg p-2">
+                  {filteredClients.map((client) => (
+                    <div
+                      key={client.id}
+                      className={`flex items-center gap-3 p-2 rounded hover:bg-gray-50 ${
+                        !client.phone ? 'opacity-50' : ''
+                      }`}
+                    >
+                      <Checkbox
+                        checked={selectedClients.includes(client.id)}
+                        onCheckedChange={() => toggleClientSelection(client.id)}
+                        disabled={!client.phone}
+                      />
+                      <Avatar className="w-8 h-8">
+                        <AvatarFallback className="text-xs">
+                          {client.fullName.split(" ").map((n) => n[0]).join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{client.fullName}</div>
+                        <div className="text-xs text-gray-500">{client.phone || 'No phone'}</div>
+                      </div>
+                      <Badge className={`${getStatusColor(client.status)} text-xs`}>
+                        {client.status}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sending Progress */}
+            {sendingMessage && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span className="text-sm">Sending messages...</span>
+                </div>
+                <div className="text-sm text-gray-600">
+                  Sent: {messageSentCount} | Failed: {messageFailedCount}
+                </div>
+              </div>
+            )}
+
+            {/* Completion Summary */}
+            {sendingComplete && (
+              <div className="space-y-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-full h-5 w-5 bg-green-500 flex items-center justify-center">
+                    <Check className="h-3 w-3 text-white" />
+                  </div>
+                  <span className="font-medium text-green-800">Sending Complete!</span>
+                </div>
+                <div className="text-sm text-green-700">
+                  <div className="flex justify-between items-center mb-1">
+                    <span>✅ Successfully sent:</span>
+                    <span className="font-bold">{messageSentCount} messages</span>
+                  </div>
+                  {messageFailedCount > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span>❌ Failed to send:</span>
+                      <span className="font-bold">{messageFailedCount} messages</span>
+                    </div>
+                  )}
+                </div>
+                <div className="text-xs text-green-600 text-center mt-2">
+                  This dialog will close automatically in 3 seconds...
+                </div>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3">
+            {!sendingComplete && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowMessageDialog(false)}
+                  disabled={sendingMessage}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={sendMessage}
+                  disabled={sendingMessage || !messageContent.trim()}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  {sendingMessage ? 'Sending...' : 'Send Messages'}
+                </Button>
+              </>
+            )}
+            {sendingComplete && (
+              <Button
+                variant="outline"
+                onClick={() => setShowMessageDialog(false)}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Close
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
