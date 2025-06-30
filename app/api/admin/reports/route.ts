@@ -373,6 +373,72 @@ export const GET = requireAdmin(async (request: NextRequest) => {
       }))
     };
 
+    // Detailed data for Excel export
+    const detailedExpensesList = expenses.map(expense => ({
+      id: expense._id,
+      description: expense.description || 'No description',
+      category: expense.category,
+      amount: expense.amount || 0,
+      date: expense.date,
+      createdAt: expense.createdAt,
+      formattedAmount: expense.amount?.toLocaleString('en-KE', { style: 'currency', currency: 'KES' }) || 'KES 0',
+      formattedDate: new Date(expense.date).toLocaleDateString('en-KE'),
+      formattedCreatedAt: new Date(expense.createdAt).toLocaleDateString('en-KE')
+    })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const detailedOrdersList = orders.map(order => ({
+      id: order._id,
+      orderNumber: order.orderNumber || 'N/A',
+      customerName: order.customer?.name || 'Unknown Customer',
+      customerEmail: order.customer?.email || 'N/A',
+      customerPhone: order.customer?.phone || 'N/A',
+      status: order.status || 'pending',
+      paymentStatus: order.paymentStatus || 'unpaid',
+      totalAmount: order.totalAmount || 0,
+      pickDropAmount: order.pickDropAmount || 0,
+      discount: order.discount || 0,
+      netAmount: (order.totalAmount || 0) - (order.discount || 0),
+      servicesCount: order.services?.length || 0,
+      servicesNames: order.services?.map(s => s.serviceName).join(', ') || 'No services',
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      formattedTotalAmount: (order.totalAmount || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+      formattedPickDropAmount: (order.pickDropAmount || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+      formattedDiscount: (order.discount || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+      formattedNetAmount: ((order.totalAmount || 0) - (order.discount || 0)).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+      formattedCreatedAt: new Date(order.createdAt).toLocaleDateString('en-KE'),
+      formattedUpdatedAt: new Date(order.updatedAt).toLocaleDateString('en-KE')
+    })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const unpaidOrdersList = orders
+      .filter(order => order.paymentStatus === 'unpaid' || order.paymentStatus === 'partial')
+      .map(order => ({
+        id: order._id,
+        orderNumber: order.orderNumber || 'N/A',
+        customerName: order.customer?.name || 'Unknown Customer',
+        customerEmail: order.customer?.email || 'N/A',
+        customerPhone: order.customer?.phone || 'N/A',
+        status: order.status || 'pending',
+        paymentStatus: order.paymentStatus || 'unpaid',
+        totalAmount: order.totalAmount || 0,
+        amountPaid: order.amountPaid || 0,
+        amountDue: (order.totalAmount || 0) - (order.amountPaid || 0),
+        pickDropAmount: order.pickDropAmount || 0,
+        discount: order.discount || 0,
+        servicesNames: order.services?.map(s => s.serviceName).join(', ') || 'No services',
+        daysPending: Math.floor((new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24)),
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        formattedTotalAmount: (order.totalAmount || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+        formattedAmountPaid: (order.amountPaid || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+        formattedAmountDue: ((order.totalAmount || 0) - (order.amountPaid || 0)).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+        formattedPickDropAmount: (order.pickDropAmount || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+        formattedDiscount: (order.discount || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+        formattedCreatedAt: new Date(order.createdAt).toLocaleDateString('en-KE'),
+        formattedUpdatedAt: new Date(order.updatedAt).toLocaleDateString('en-KE')
+      }))
+      .sort((a, b) => b.daysPending - a.daysPending);
+
     const reportData = {
       salesReport: {
         totalRevenue,
@@ -406,7 +472,15 @@ export const GET = requireAdmin(async (request: NextRequest) => {
       paymentStatusAmountPie,
       paymentStatusDetails,
       orderTrends,
-      financialMetrics
+      financialMetrics,
+      // Detailed lists for Excel export
+      detailedData: {
+        expensesList: detailedExpensesList,
+        ordersList: detailedOrdersList,
+        unpaidOrdersList: unpaidOrdersList,
+        totalUnpaidAmount: unpaidOrdersList.reduce((sum, order) => sum + order.amountDue, 0),
+        unpaidOrdersCount: unpaidOrdersList.length
+      }
     };
 
     return NextResponse.json(reportData);

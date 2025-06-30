@@ -16,12 +16,14 @@ import {
   Download,
   Filter,
   RefreshCw,
-  ChevronDown
+  ChevronDown,
+  FileSpreadsheet
 } from "lucide-react"
 import { useAuth } from '@/hooks/useAuth'
 import { PieChart, Pie, Cell, Legend, ResponsiveContainer, Tooltip } from 'recharts'
 import { toast } from "@/components/ui/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import * as XLSX from 'xlsx'
 
 interface ReportData {
   salesReport: {
@@ -69,6 +71,69 @@ interface ReportData {
   }
   paymentStatusPie: Array<{ status: string; count: number }>
   paymentStatusAmountPie: Array<{ status: string; amount: number }>
+  detailedData?: {
+    expensesList: Array<{
+      id: string
+      description: string
+      category: string
+      amount: number
+      date: string
+      createdAt: string
+      formattedAmount: string
+      formattedDate: string
+      formattedCreatedAt: string
+    }>
+    ordersList: Array<{
+      id: string
+      orderNumber: string
+      customerName: string
+      customerEmail: string
+      customerPhone: string
+      status: string
+      paymentStatus: string
+      totalAmount: number
+      pickDropAmount: number
+      discount: number
+      netAmount: number
+      servicesCount: number
+      servicesNames: string
+      createdAt: string
+      updatedAt: string
+      formattedTotalAmount: string
+      formattedPickDropAmount: string
+      formattedDiscount: string
+      formattedNetAmount: string
+      formattedCreatedAt: string
+      formattedUpdatedAt: string
+    }>
+    unpaidOrdersList: Array<{
+      id: string
+      orderNumber: string
+      customerName: string
+      customerEmail: string
+      customerPhone: string
+      status: string
+      paymentStatus: string
+      totalAmount: number
+      amountPaid: number
+      amountDue: number
+      pickDropAmount: number
+      discount: number
+      servicesNames: string
+      daysPending: number
+      createdAt: string
+      updatedAt: string
+      formattedTotalAmount: string
+      formattedAmountPaid: string
+      formattedAmountDue: string
+      formattedPickDropAmount: string
+      formattedDiscount: string
+      formattedCreatedAt: string
+      formattedUpdatedAt: string
+    }>
+    totalUnpaidAmount: number
+    unpaidOrdersCount: number
+  }
 }
 
 const STATUS_COLORS = [
@@ -164,6 +229,291 @@ export default function ReportsPage() {
     }
     return colors[status] || 'bg-gray-100 text-gray-800'
   }
+
+  const exportReportsExcel = () => {
+    if (!reportData || !reportData.detailedData) {
+      toast({
+        title: "No data to export",
+        description: "Please wait for the reports to load before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const currentDate = new Date().toISOString().split('T')[0];
+    const fileName = `econuru-comprehensive-report-${currentDate}.xlsx`;
+
+    // Create a new workbook
+    const workbook = XLSX.utils.book_new();
+
+    // 1. SUMMARY SHEET
+    const summaryData = [
+      ['ECONURU LAUNDRY SERVICES'],
+      ['Comprehensive Business Report'],
+      [`Generated: ${new Date().toLocaleDateString('en-KE')}`],
+      [`Period: Last ${dateRange} days`],
+      [''],
+      ['=== EXECUTIVE SUMMARY ==='],
+      ['Total Revenue', formatCurrency(reportData.salesReport.totalRevenue)],
+      ['Total Orders', reportData.salesReport.totalOrders.toLocaleString()],
+      ['Average Order Value', formatCurrency(reportData.salesReport.averageOrderValue)],
+      ['Total Customers', reportData.customerReport.totalCustomers.toLocaleString()],
+      ['New Customers', reportData.customerReport.newCustomers.toLocaleString()],
+      ['Total Expenses', formatCurrency(reportData.expenseReport.totalExpenses)],
+      ['Net Profit', formatCurrency(reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses)],
+      ['Profit Margin', `${reportData.salesReport.totalRevenue > 0 ? ((reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses) / reportData.salesReport.totalRevenue * 100).toFixed(2) : 0}%`],
+      [''],
+      ['=== UNPAID ORDERS SUMMARY ==='],
+      ['Total Unpaid Orders', reportData.detailedData.unpaidOrdersCount.toLocaleString()],
+      ['Total Unpaid Amount', formatCurrency(reportData.detailedData.totalUnpaidAmount)],
+      [''],
+      ['=== PAYMENT STATUS BREAKDOWN ==='],
+      ...reportData.paymentStatusAmountPie.map(payment => [
+        `${payment.status.charAt(0).toUpperCase() + payment.status.slice(1)} Orders`,
+        formatCurrency(payment.amount)
+      ]),
+      [''],
+      ['=== TOP SERVICES ==='],
+      ...reportData.serviceReport.topServices.slice(0, 10).map(service => [
+        service.name,
+        formatCurrency(service.revenue),
+        `${service.orderCount} orders`
+      ])
+    ];
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+    // 2. ALL EXPENSES SHEET
+    const expensesHeaders = [
+      'Date',
+      'Description', 
+      'Category',
+      'Amount (KES)',
+      'Amount (Formatted)',
+      'Created Date',
+      'ID'
+    ];
+    const expensesData = [
+      expensesHeaders,
+      ...reportData.detailedData.expensesList.map(expense => [
+        expense.formattedDate,
+        expense.description,
+        expense.category,
+        expense.amount,
+        expense.formattedAmount,
+        expense.formattedCreatedAt,
+        expense.id.toString()
+      ])
+    ];
+    // Add summary row at the top
+    expensesData.splice(1, 0, [
+      'TOTAL EXPENSES',
+      '',
+      `${reportData.detailedData.expensesList.length} items`,
+      reportData.expenseReport.totalExpenses,
+      formatCurrency(reportData.expenseReport.totalExpenses),
+      '',
+      ''
+    ]);
+    expensesData.splice(2, 0, ['']); // Empty row for separation
+    const expensesSheet = XLSX.utils.aoa_to_sheet(expensesData);
+    XLSX.utils.book_append_sheet(workbook, expensesSheet, 'All Expenses');
+
+    // 3. ALL INCOME/ORDERS SHEET
+    const incomeHeaders = [
+      'Order Number',
+      'Customer Name',
+      'Customer Email',
+      'Customer Phone',
+      'Status',
+      'Payment Status',
+      'Total Amount (KES)',
+      'Pick & Drop (KES)',
+      'Discount (KES)',
+      'Net Amount (KES)',
+      'Services',
+      'Services Count',
+      'Order Date',
+      'Updated Date',
+      'ID'
+    ];
+    const incomeData = [
+      incomeHeaders,
+      ...reportData.detailedData.ordersList.map(order => [
+        order.orderNumber,
+        order.customerName,
+        order.customerEmail,
+        order.customerPhone,
+        order.status,
+        order.paymentStatus,
+        order.totalAmount,
+        order.pickDropAmount,
+        order.discount,
+        order.netAmount,
+        order.servicesNames,
+        order.servicesCount,
+        order.formattedCreatedAt,
+        order.formattedUpdatedAt,
+        order.id.toString()
+      ])
+    ];
+    // Add summary row at the top
+    incomeData.splice(1, 0, [
+      'TOTAL INCOME',
+      `${reportData.customerReport.totalCustomers} customers`,
+      '',
+      '',
+      `${reportData.salesReport.totalOrders} orders`,
+      '',
+      reportData.salesReport.totalRevenue,
+      reportData.salesReport.totalPickDropAmount || 0,
+      reportData.salesReport.totalDiscounts || 0,
+      reportData.salesReport.totalRevenue - (reportData.salesReport.totalDiscounts || 0),
+      '',
+      '',
+      '',
+      '',
+      ''
+    ]);
+    incomeData.splice(2, 0, ['']); // Empty row for separation
+    const incomeSheet = XLSX.utils.aoa_to_sheet(incomeData);
+    XLSX.utils.book_append_sheet(workbook, incomeSheet, 'All Income');
+
+    // 4. UNPAID LAUNDRY SHEET
+    const unpaidHeaders = [
+      'Order Number',
+      'Customer Name', 
+      'Customer Email',
+      'Customer Phone',
+      'Status',
+      'Payment Status',
+      'Total Amount (KES)',
+      'Amount Paid (KES)',
+      'Amount Due (KES)',
+      'Pick & Drop (KES)',
+      'Discount (KES)',
+      'Services',
+      'Days Pending',
+      'Order Date',
+      'Last Updated',
+      'Priority',
+      'ID'
+    ];
+    const unpaidData = [
+      unpaidHeaders,
+      ...reportData.detailedData.unpaidOrdersList.map(order => [
+        order.orderNumber,
+        order.customerName,
+        order.customerEmail,
+        order.customerPhone,
+        order.status,
+        order.paymentStatus,
+        order.totalAmount,
+        order.amountPaid,
+        order.amountDue,
+        order.pickDropAmount,
+        order.discount,
+        order.servicesNames,
+        order.daysPending,
+        order.formattedCreatedAt,
+        order.formattedUpdatedAt,
+        order.daysPending > 30 ? 'HIGH' : order.daysPending > 14 ? 'MEDIUM' : 'LOW',
+        order.id.toString()
+      ])
+    ];
+    // Add summary row at the top
+    unpaidData.splice(1, 0, [
+      'TOTAL UNPAID',
+      `${reportData.detailedData.unpaidOrdersCount} orders`,
+      '',
+      '',
+      'UNPAID/PARTIAL',
+      '',
+      reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.totalAmount, 0),
+      reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.amountPaid, 0),
+      reportData.detailedData.totalUnpaidAmount,
+      reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.pickDropAmount, 0),
+      reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.discount, 0),
+      '',
+      Math.round(reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.daysPending, 0) / Math.max(reportData.detailedData.unpaidOrdersCount, 1)),
+      '',
+      '',
+      '',
+      ''
+    ]);
+    unpaidData.splice(2, 0, ['']); // Empty row for separation
+    const unpaidSheet = XLSX.utils.aoa_to_sheet(unpaidData);
+    XLSX.utils.book_append_sheet(workbook, unpaidSheet, 'Unpaid Laundry');
+
+    // 5. ANALYTICS SHEET
+    const analyticsData = [
+      ['ECONURU BUSINESS ANALYTICS'],
+      [`Period: Last ${dateRange} days`],
+      [''],
+      ['=== REVENUE ANALYTICS ==='],
+      ['Gross Revenue', formatCurrency(reportData.salesReport.grossRevenue || reportData.salesReport.totalRevenue)],
+      ['Total Discounts', formatCurrency(reportData.salesReport.totalDiscounts || 0)],
+      ['Pick & Drop Revenue', formatCurrency(reportData.salesReport.totalPickDropAmount || 0)],
+      ['Net Revenue', formatCurrency(reportData.salesReport.totalRevenue)],
+      [''],
+      ['=== MONTHLY REVENUE BREAKDOWN ==='],
+      ['Month', 'Revenue (KES)', 'Orders', 'Pick&Drop (KES)', 'Discounts (KES)'],
+      ...reportData.salesReport.revenueByMonth.map(month => [
+        month.month,
+        month.revenue,
+        (month as any).orders || 0,
+        (month as any).pickDrop || 0,
+        (month as any).discounts || 0
+      ]),
+      [''],
+      ['=== ORDER STATUS BREAKDOWN ==='],
+      ['Status', 'Count', 'Revenue (KES)', 'Avg Order Value (KES)'],
+      ...reportData.salesReport.ordersByStatus.map(status => [
+        status.status,
+        status.count,
+        (status as any).revenue || 0,
+        (status as any).averageValue || 0
+      ]),
+      [''],
+      ['=== EXPENSE BREAKDOWN ==='],
+      ['Category', 'Amount (KES)', 'Count', 'Average (KES)'],
+      ...reportData.expenseReport.expensesByCategory.map(expense => [
+        expense.category,
+        expense.amount,
+        (expense as any).count || 1,
+        (expense as any).averageAmount || expense.amount
+      ]),
+      [''],
+      ['=== TOP CUSTOMERS ==='],
+      ['Rank', 'Customer Name', 'Total Spent (KES)', 'Orders', 'Avg Order (KES)'],
+      ...reportData.customerReport.topCustomers.map((customer, index) => [
+        index + 1,
+        customer.name,
+        customer.totalSpent,
+        customer.orderCount,
+        customer.orderCount > 0 ? (customer.totalSpent / customer.orderCount).toFixed(2) : 0
+      ]),
+      [''],
+      ['=== SERVICE PERFORMANCE ==='],
+      ['Service Name', 'Revenue (KES)', 'Orders', 'Percentage (%)'],
+      ...reportData.serviceReport.servicePerformance.map(service => [
+        service.name,
+        service.revenue,
+        (service as any).orderCount || 0,
+        service.percentage.toFixed(2)
+      ])
+    ];
+    const analyticsSheet = XLSX.utils.aoa_to_sheet(analyticsData);
+    XLSX.utils.book_append_sheet(workbook, analyticsSheet, 'Analytics');
+
+    // Write the file
+    XLSX.writeFile(workbook, fileName);
+
+    toast({
+      title: "Excel Report exported successfully",
+      description: `Comprehensive report with ${reportData.detailedData.expensesList.length} expenses, ${reportData.detailedData.ordersList.length} orders, and ${reportData.detailedData.unpaidOrdersCount} unpaid orders downloaded as ${fileName}`,
+    });
+  };
 
   const exportReports = () => {
     if (!reportData) {
@@ -541,15 +891,20 @@ export default function ReportsPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={exportReports}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export as JSON
-                  <span className="ml-2 text-xs text-gray-500">(Detailed)</span>
+                <DropdownMenuItem onClick={exportReportsExcel}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Export as Excel
+                  <span className="ml-2 text-xs text-gray-500">(Complete Lists)</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={exportReportsCSV}>
                   <Download className="h-4 w-4 mr-2" />
                   Export as CSV
-                  <span className="ml-2 text-xs text-gray-500">(Spreadsheet)</span>
+                  <span className="ml-2 text-xs text-gray-500">(Summary)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportReports}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export as JSON
+                  <span className="ml-2 text-xs text-gray-500">(Raw Data)</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
