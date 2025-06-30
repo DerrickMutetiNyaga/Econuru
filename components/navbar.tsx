@@ -105,7 +105,7 @@ export function Navbar() {
             <Link href="/" className="flex items-center group">
               <div className="h-12 group-hover:scale-110 transition-transform duration-200">
                 <Image 
-                  src="/econurulogo.svg" 
+                  src="/logoeco.png" 
                   alt="Eco Nuru Logo" 
                   width={144} 
                   height={48} 
@@ -184,7 +184,7 @@ export function Navbar() {
               <Link href="/" className="flex items-center" onClick={() => setIsMobileMenuOpen(false)}>
                 <div className="h-12">
                   <Image 
-                    src="/econurulogo.svg" 
+                    src="/logoeco.png" 
                     alt="Eco Nuru Logo" 
                     width={144} 
                     height={48} 
@@ -401,7 +401,7 @@ export function Navbar() {
             <Link href="/" className="flex items-center">
               <div className="h-8">
                 <Image 
-                  src="/econurulogo.svg" 
+                  src="/logoeco.png" 
                   alt="Eco Nuru Logo" 
                   width={96} 
                   height={32} 

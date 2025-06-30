@@ -14,7 +14,7 @@ export function Footer() {
             <Link href="/" className="flex items-center mb-6">
               <div className="h-12">
                 <Image 
-                  src="/econurulogo.svg" 
+                  src="/logoeco.png" 
                   alt="Eco Nuru Logo" 
                   width={144} 
                   height={48} 
