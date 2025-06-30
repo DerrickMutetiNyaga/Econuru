@@ -1,0 +1,948 @@
+"use client"
+
+import React, { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { 
+  BarChart3, 
+  TrendingUp, 
+  Users, 
+  DollarSign, 
+  Package, 
+  Calendar,
+  Download,
+  Filter,
+  RefreshCw,
+  ChevronDown
+} from "lucide-react"
+import { useAuth } from '@/hooks/useAuth'
+import { PieChart, Pie, Cell, Legend, ResponsiveContainer, Tooltip } from 'recharts'
+import { toast } from "@/components/ui/use-toast"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+
+interface ReportData {
+  salesReport: {
+    totalRevenue: number
+    totalOrders: number
+    averageOrderValue: number
+    revenueByMonth: Array<{ month: string; revenue: number }>
+    ordersByStatus: Array<{ status: string; count: number }>
+    grossRevenue?: number
+    totalPickDropAmount?: number
+    totalDiscounts?: number
+  }
+  customerReport: {
+    totalCustomers: number
+    newCustomers: number
+    topCustomers: Array<{ name: string; totalSpent: number; orderCount: number }>
+    customerStatus: Array<{ status: string; count: number }>
+    customerRetentionRate?: number
+    repeatCustomers?: number
+  }
+  expenseReport: {
+    totalExpenses: number
+    expensesByCategory: Array<{ category: string; amount: number }>
+    monthlyExpenses: Array<{ month: string; amount: number }>
+  }
+  serviceReport: {
+    topServices: Array<{ name: string; revenue: number; orderCount: number }>
+    servicePerformance: Array<{ name: string; revenue: number; percentage: number }>
+  }
+  promotionReport?: {
+    totalPromotions: number
+    activePromotions: number
+    promotionsByType: { [key: string]: number }
+    totalPromotionValue: number
+    promotions: Array<{
+      title: string
+      type: string
+      discountAmount: number
+      discountPercentage: number
+      isActive: boolean
+      startDate: string
+      endDate: string
+      createdAt: string
+    }>
+  }
+  paymentStatusPie: Array<{ status: string; count: number }>
+  paymentStatusAmountPie: Array<{ status: string; amount: number }>
+}
+
+const STATUS_COLORS = [
+  '#8884d8', // confirmed
+  '#ffc658', // pending
+  '#82ca9d', // delivered
+  '#ff8042', // cancelled
+  '#ffbb28', // in-progress
+  '#d0ed57', // ready
+  '#a4de6c', // picked
+  '#d0ed57', // to-be-picked
+];
+
+const CUSTOMER_STATUS_COLORS = [
+  '#10b981', // active - emerald
+  '#6b7280', // inactive - gray
+  '#8b5cf6', // vip - purple
+  '#f59e0b', // premium - amber
+  '#3b82f6', // new - blue
+  '#ef4444', // suspended - red
+];
+
+export default function ReportsPage() {
+  const { token } = useAuth()
+  const [reportData, setReportData] = useState<ReportData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [dateRange, setDateRange] = useState('30')
+  const [activeTab, setActiveTab] = useState('sales')
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (token) {
+      fetchReportData()
+    }
+  }, [dateRange, token])
+
+  const fetchReportData = async () => {
+    if (!token) {
+      setError('No authentication token found')
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/admin/reports?range=${dateRange}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setReportData(data)
+      } else {
+        const errorData = await response.json()
+        setError(errorData.error || 'Failed to fetch report data')
+      }
+    } catch (error) {
+      console.error('Error fetching report data:', error)
+      setError('Network error. Please check your connection.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: 'KES'
+    }).format(amount || 0)
+  }
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('en-KE').format(num || 0)
+  }
+
+  const getStatusColor = (status: string) => {
+    const colors: { [key: string]: string } = {
+      'pending': 'bg-yellow-100 text-yellow-800',
+      'confirmed': 'bg-blue-100 text-blue-800',
+      'in-progress': 'bg-orange-100 text-orange-800',
+      'ready': 'bg-green-100 text-green-800',
+      'delivered': 'bg-emerald-100 text-emerald-800',
+      'cancelled': 'bg-red-100 text-red-800',
+      'active': 'bg-green-100 text-green-800',
+      'inactive': 'bg-gray-100 text-gray-800',
+      'vip': 'bg-purple-100 text-purple-800',
+      'premium': 'bg-gold-100 text-gold-800',
+      'new': 'bg-blue-100 text-blue-800'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  const exportReports = () => {
+    if (!reportData) {
+      toast({
+        title: "No data to export",
+        description: "Please wait for the reports to load before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const currentDate = new Date().toISOString().split('T')[0];
+    const fileName = `econuru-reports-${currentDate}.json`;
+
+    // Create comprehensive report data
+    const exportData = {
+      reportMetadata: {
+        generatedAt: new Date().toISOString(),
+        dateRange: `${dateRange} days`,
+        reportPeriod: `${dateRange} days ending ${new Date().toISOString().split('T')[0]}`,
+        businessName: "Econuru Laundry Services",
+        reportType: "Comprehensive Business Report"
+      },
+      executiveSummary: {
+        totalRevenue: reportData.salesReport.totalRevenue,
+        totalOrders: reportData.salesReport.totalOrders,
+        averageOrderValue: reportData.salesReport.averageOrderValue,
+        totalCustomers: reportData.customerReport.totalCustomers,
+        newCustomers: reportData.customerReport.newCustomers,
+        totalExpenses: reportData.expenseReport.totalExpenses,
+        netProfit: reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses,
+        profitMargin: reportData.salesReport.totalRevenue > 0 
+          ? ((reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses) / reportData.salesReport.totalRevenue * 100).toFixed(2) + '%'
+          : '0%'
+      },
+      salesReport: {
+        summary: {
+          totalRevenue: reportData.salesReport.totalRevenue,
+          totalOrders: reportData.salesReport.totalOrders,
+          averageOrderValue: reportData.salesReport.averageOrderValue,
+          revenuePerOrder: reportData.salesReport.totalOrders > 0 
+            ? (reportData.salesReport.totalRevenue / reportData.salesReport.totalOrders).toFixed(2)
+            : 0
+        },
+        revenueByMonth: reportData.salesReport.revenueByMonth.map(item => ({
+          month: item.month,
+          revenue: item.revenue,
+          formattedRevenue: formatCurrency(item.revenue)
+        })),
+        ordersByStatus: reportData.salesReport.ordersByStatus.map(item => ({
+          status: item.status,
+          count: item.count,
+          percentage: ((item.count / reportData.salesReport.totalOrders) * 100).toFixed(2) + '%'
+        })),
+        paymentStatusDistribution: {
+          byCount: reportData.paymentStatusPie.map(item => ({
+            status: item.status,
+            count: item.count,
+            percentage: ((item.count / reportData.salesReport.totalOrders) * 100).toFixed(2) + '%'
+          })),
+          byAmount: reportData.paymentStatusAmountPie.map(item => ({
+            status: item.status,
+            amount: item.amount,
+            formattedAmount: formatCurrency(item.amount),
+            percentage: ((item.amount / reportData.salesReport.totalRevenue) * 100).toFixed(2) + '%'
+          }))
+        }
+      },
+      customerReport: {
+        summary: {
+          totalCustomers: reportData.customerReport.totalCustomers,
+          newCustomers: reportData.customerReport.newCustomers,
+          newCustomerPercentage: reportData.customerReport.totalCustomers > 0 
+            ? ((reportData.customerReport.newCustomers / reportData.customerReport.totalCustomers) * 100).toFixed(2) + '%'
+            : '0%',
+          averageCustomerValue: reportData.customerReport.totalCustomers > 0 
+            ? (reportData.salesReport.totalRevenue / reportData.customerReport.totalCustomers).toFixed(2)
+            : 0
+        },
+        topCustomers: reportData.customerReport.topCustomers.map((customer, index) => ({
+          rank: index + 1,
+          name: customer.name,
+          totalSpent: customer.totalSpent,
+          formattedTotalSpent: formatCurrency(customer.totalSpent),
+          orderCount: customer.orderCount,
+          averageOrderValue: customer.orderCount > 0 
+            ? (customer.totalSpent / customer.orderCount).toFixed(2)
+            : 0
+        })),
+        customerStatusDistribution: reportData.customerReport.customerStatus.map(item => ({
+          status: item.status,
+          count: item.count,
+          percentage: ((item.count / reportData.customerReport.totalCustomers) * 100).toFixed(2) + '%'
+        }))
+      },
+      serviceReport: {
+        summary: {
+          totalServices: reportData.serviceReport.topServices.length,
+          totalServiceRevenue: reportData.serviceReport.topServices.reduce((sum, service) => sum + service.revenue, 0),
+          averageServiceRevenue: reportData.serviceReport.topServices.length > 0 
+            ? (reportData.serviceReport.topServices.reduce((sum, service) => sum + service.revenue, 0) / reportData.serviceReport.topServices.length).toFixed(2)
+            : 0
+        },
+        topServices: reportData.serviceReport.topServices.map((service, index) => ({
+          rank: index + 1,
+          name: service.name,
+          revenue: service.revenue,
+          formattedRevenue: formatCurrency(service.revenue),
+          orderCount: service.orderCount,
+          averagePrice: service.orderCount > 0 
+            ? (service.revenue / service.orderCount).toFixed(2)
+            : 0
+        })),
+        servicePerformance: reportData.serviceReport.servicePerformance.map(service => ({
+          name: service.name,
+          revenue: service.revenue,
+          formattedRevenue: formatCurrency(service.revenue),
+          percentage: service.percentage.toFixed(2) + '%'
+        }))
+      },
+      expenseReport: {
+        summary: {
+          totalExpenses: reportData.expenseReport.totalExpenses,
+          formattedTotalExpenses: formatCurrency(reportData.expenseReport.totalExpenses),
+          expenseRatio: reportData.salesReport.totalRevenue > 0 
+            ? ((reportData.expenseReport.totalExpenses / reportData.salesReport.totalRevenue) * 100).toFixed(2) + '%'
+            : '0%'
+        },
+        expensesByCategory: reportData.expenseReport.expensesByCategory.map(item => ({
+          category: item.category,
+          amount: item.amount,
+          formattedAmount: formatCurrency(item.amount),
+          percentage: ((item.amount / reportData.expenseReport.totalExpenses) * 100).toFixed(2) + '%'
+        })),
+        monthlyExpenses: reportData.expenseReport.monthlyExpenses.map(item => ({
+          month: item.month,
+          amount: item.amount,
+          formattedAmount: formatCurrency(item.amount)
+        }))
+      },
+      financialAnalysis: {
+        profitability: {
+          grossRevenue: reportData.salesReport.totalRevenue,
+          totalExpenses: reportData.expenseReport.totalExpenses,
+          netProfit: reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses,
+          profitMargin: reportData.salesReport.totalRevenue > 0 
+            ? ((reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses) / reportData.salesReport.totalRevenue * 100).toFixed(2) + '%'
+            : '0%'
+        },
+        operationalMetrics: {
+          ordersPerCustomer: reportData.customerReport.totalCustomers > 0 
+            ? (reportData.salesReport.totalOrders / reportData.customerReport.totalCustomers).toFixed(2)
+            : 0,
+          revenuePerCustomer: reportData.customerReport.totalCustomers > 0 
+            ? (reportData.salesReport.totalRevenue / reportData.customerReport.totalCustomers).toFixed(2)
+            : 0,
+          averageOrderValue: reportData.salesReport.averageOrderValue
+        }
+      }
+    };
+
+    // Create and download the file
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Report exported successfully",
+      description: `Comprehensive report downloaded as ${fileName}`,
+    });
+  };
+
+  const exportReportsCSV = () => {
+    if (!reportData) {
+      toast({
+        title: "No data to export",
+        description: "Please wait for the reports to load before exporting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const currentDate = new Date().toISOString().split('T')[0];
+    const fileName = `econuru-business-report-${currentDate}.csv`;
+
+    // Create simple, practical CSV content
+    let csvContent = "Econuru Laundry Services - Business Report\n";
+    csvContent += `Report Date: ${new Date().toLocaleDateString()}\n`;
+    csvContent += `Period: Last ${dateRange} days\n\n`;
+
+    // 1. SALES SUMMARY
+    csvContent += "=== SALES SUMMARY ===\n";
+    csvContent += "Total Revenue,KES " + reportData.salesReport.totalRevenue.toLocaleString() + "\n";
+    csvContent += "Total Orders," + reportData.salesReport.totalOrders + "\n";
+    csvContent += "Average Order Value,KES " + reportData.salesReport.averageOrderValue.toLocaleString() + "\n";
+    csvContent += "Gross Revenue,KES " + (reportData.salesReport.grossRevenue || reportData.salesReport.totalRevenue).toLocaleString() + "\n\n";
+
+    // 2. PICK & DROP SUMMARY
+    csvContent += "=== PICK & DROP SUMMARY ===\n";
+    csvContent += "Total Pick & Drop Revenue,KES " + (reportData.salesReport.totalPickDropAmount || 0).toLocaleString() + "\n";
+    csvContent += "Orders with Pick & Drop," + (reportData.salesReport.totalPickDropAmount > 0 ? "Yes" : "No") + "\n\n";
+
+    // 3. DISCOUNTS SUMMARY
+    csvContent += "=== DISCOUNTS SUMMARY ===\n";
+    csvContent += "Total Discounts Given,KES " + (reportData.salesReport.totalDiscounts || 0).toLocaleString() + "\n";
+    csvContent += "Orders with Discounts," + (reportData.salesReport.totalDiscounts > 0 ? "Yes" : "No") + "\n\n";
+
+    // 4. PROMOTIONS SUMMARY
+    csvContent += "=== PROMOTIONS SUMMARY ===\n";
+    csvContent += "Total Promotions Created," + (reportData.promotionReport?.totalPromotions || 0) + "\n";
+    csvContent += "Active Promotions," + (reportData.promotionReport?.activePromotions || 0) + "\n";
+    csvContent += "Total Promotion Value,KES " + (reportData.promotionReport?.totalPromotionValue || 0).toLocaleString() + "\n\n";
+
+    // 5. SERVICES PERFORMANCE
+    csvContent += "=== TOP SERVICES ===\n";
+    csvContent += "Service Name,Revenue (KES),Orders,Quantity Sold,Average Price (KES)\n";
+    reportData.serviceReport.topServices.forEach((service, index) => {
+      csvContent += `${service.name},${service.revenue.toLocaleString()},${service.orderCount},${service.quantity || 0},${(service.averagePrice || 0).toLocaleString()}\n`;
+    });
+    csvContent += "\n";
+
+    // 6. EXPENSES BREAKDOWN
+    csvContent += "=== EXPENSES BREAKDOWN ===\n";
+    csvContent += "Category,Amount (KES),Number of Expenses,Average per Expense (KES)\n";
+    reportData.expenseReport.expensesByCategory.forEach(expense => {
+      csvContent += `${expense.category},${expense.amount.toLocaleString()},${expense.count || 1},${(expense.averageAmount || expense.amount).toLocaleString()}\n`;
+    });
+    csvContent += "\n";
+
+    // 7. MONTHLY REVENUE
+    csvContent += "=== MONTHLY REVENUE ===\n";
+    csvContent += "Month,Revenue (KES),Orders,Pick & Drop (KES),Discounts (KES)\n";
+    reportData.salesReport.revenueByMonth.forEach(month => {
+      csvContent += `${month.month},${month.revenue.toLocaleString()},${month.orders || 0},${(month.pickDrop || 0).toLocaleString()},${(month.discounts || 0).toLocaleString()}\n`;
+    });
+    csvContent += "\n";
+
+    // 8. ORDER STATUS
+    csvContent += "=== ORDER STATUS ===\n";
+    csvContent += "Status,Count,Revenue (KES),Average Order Value (KES)\n";
+    reportData.salesReport.ordersByStatus.forEach(status => {
+      csvContent += `${status.status},${status.count},${status.revenue.toLocaleString()},${status.averageValue.toLocaleString()}\n`;
+    });
+    csvContent += "\n";
+
+    // 9. PAYMENT STATUS
+    csvContent += "=== PAYMENT STATUS ===\n";
+    csvContent += "Status,Count,Total Amount (KES),Average Amount (KES)\n";
+    reportData.paymentStatusAmountPie.forEach(payment => {
+      const count = reportData.paymentStatusPie.find(p => p.status === payment.status)?.count || 0;
+      const avgAmount = count > 0 ? payment.amount / count : 0;
+      csvContent += `${payment.status},${count},${payment.amount.toLocaleString()},${avgAmount.toLocaleString()}\n`;
+    });
+    csvContent += "\n";
+
+    // 10. TOP CUSTOMERS
+    csvContent += "=== TOP CUSTOMERS ===\n";
+    csvContent += "Rank,Customer Name,Total Spent (KES),Orders,Average Order (KES)\n";
+    reportData.customerReport.topCustomers.forEach((customer, index) => {
+      csvContent += `${index + 1},${customer.name},${customer.totalSpent.toLocaleString()},${customer.orderCount},${customer.averageOrderValue.toLocaleString()}\n`;
+    });
+    csvContent += "\n";
+
+    // 11. PROFITABILITY SUMMARY
+    csvContent += "=== PROFITABILITY SUMMARY ===\n";
+    const netProfit = reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses;
+    const profitMargin = reportData.salesReport.totalRevenue > 0 ? (netProfit / reportData.salesReport.totalRevenue * 100) : 0;
+    
+    csvContent += "Gross Revenue,KES " + (reportData.salesReport.grossRevenue || reportData.salesReport.totalRevenue).toLocaleString() + "\n";
+    csvContent += "Total Expenses,KES " + reportData.expenseReport.totalExpenses.toLocaleString() + "\n";
+    csvContent += "Net Profit,KES " + netProfit.toLocaleString() + "\n";
+    csvContent += "Profit Margin," + profitMargin.toFixed(2) + "%\n";
+    csvContent += "Total Customers," + reportData.customerReport.totalCustomers + "\n";
+    csvContent += "New Customers," + reportData.customerReport.newCustomers + "\n";
+
+    // Create and download the file
+    const dataBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Business Report exported successfully",
+      description: `Simple business report downloaded as ${fileName}`,
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="h-6 w-6 animate-spin" />
+          <span>Loading reports...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+          <div className="text-red-600 text-lg font-medium">Error Loading Reports</div>
+          <div className="text-gray-600 text-center max-w-md">{error}</div>
+          <Button onClick={fetchReportData} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!reportData) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+          <div className="text-gray-600 text-lg">No data available</div>
+          <Button onClick={fetchReportData} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Load Data
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Reports & Analytics</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Comprehensive business insights and performance metrics</p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <Select value={dateRange} onValueChange={setDateRange}>
+            <SelectTrigger className="w-full sm:w-40">
+              <SelectValue placeholder="Date Range" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7">Last 7 days</SelectItem>
+              <SelectItem value="30">Last 30 days</SelectItem>
+              <SelectItem value="90">Last 90 days</SelectItem>
+              <SelectItem value="365">Last year</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            <Button onClick={fetchReportData} variant="outline" size="sm" className="flex-1 sm:flex-none">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Refresh</span>
+              <span className="sm:hidden">↻</span>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="flex-1 sm:flex-none">
+                  <Download className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Export</span>
+                  <span className="sm:hidden">↓</span>
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportReports}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export as JSON
+                  <span className="ml-2 text-xs text-gray-500">(Detailed)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportReportsCSV}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export as CSV
+                  <span className="ml-2 text-xs text-gray-500">(Spreadsheet)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg sm:text-2xl font-bold">{formatCurrency(reportData.salesReport.totalRevenue)}</div>
+            <p className="text-xs text-muted-foreground">
+              {reportData.salesReport.totalOrders} orders
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Orders</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg sm:text-2xl font-bold">{formatNumber(reportData.salesReport.totalOrders)}</div>
+            <p className="text-xs text-muted-foreground">
+              Avg: {formatCurrency(reportData.salesReport.averageOrderValue)}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Customers</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg sm:text-2xl font-bold">{formatNumber(reportData.customerReport.totalCustomers)}</div>
+            <p className="text-xs text-muted-foreground">
+              +{reportData.customerReport.newCustomers} new
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Expenses</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg sm:text-2xl font-bold">{formatCurrency(reportData.expenseReport.totalExpenses)}</div>
+            <p className="text-xs text-muted-foreground">
+              Net: {formatCurrency(reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Detailed Reports */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto sm:h-10">
+          <TabsTrigger value="sales" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-0 text-xs sm:text-sm">
+            <BarChart3 className="h-4 w-4" />
+            <span>Sales</span>
+          </TabsTrigger>
+          <TabsTrigger value="customers" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-0 text-xs sm:text-sm">
+            <Users className="h-4 w-4" />
+            <span>Customers</span>
+          </TabsTrigger>
+          <TabsTrigger value="services" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-0 text-xs sm:text-sm">
+            <Package className="h-4 w-4" />
+            <span>Services</span>
+          </TabsTrigger>
+          <TabsTrigger value="expenses" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-0 text-xs sm:text-sm">
+            <TrendingUp className="h-4 w-4" />
+            <span>Expenses</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="sales" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Revenue by Month</CardTitle>
+                <CardDescription className="text-sm">Monthly revenue breakdown</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 sm:space-y-4">
+                  {reportData.salesReport.revenueByMonth.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{item.month}</span>
+                      <span className="text-sm font-bold">{formatCurrency(item.revenue)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Orders by Status</CardTitle>
+                <CardDescription className="text-sm">Order status distribution</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div style={{ width: '100%', height: '200px', minHeight: '200px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={reportData.salesReport.ordersByStatus}
+                        dataKey="count"
+                        nameKey="status"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={60}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {reportData.salesReport.ordersByStatus.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Orders by Payment Status (Count)</CardTitle>
+                <CardDescription className="text-sm">Paid vs Unpaid vs Partial (by order count)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div style={{ width: '100%', height: '200px', minHeight: '200px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={reportData.paymentStatusPie}
+                        dataKey="count"
+                        nameKey="status"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={60}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {reportData.paymentStatusPie.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Orders by Payment Status (Amount)</CardTitle>
+                <CardDescription className="text-sm">Paid vs Unpaid vs Partial (by total KES)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div style={{ width: '100%', height: '200px', minHeight: '200px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={reportData.paymentStatusAmountPie}
+                        dataKey="amount"
+                        nameKey="status"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={60}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {reportData.paymentStatusAmountPie.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={STATUS_COLORS[index % STATUS_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={formatCurrency} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="customers" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Top Customers</CardTitle>
+                <CardDescription className="text-sm">Highest spending customers</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 sm:space-y-4">
+                  {reportData.customerReport.topCustomers.map((customer, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{customer.name}</p>
+                        <p className="text-sm text-gray-600">{customer.orderCount} orders</p>
+                      </div>
+                      <span className="font-bold text-sm sm:text-base ml-2">{formatCurrency(customer.totalSpent)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Customer Status Distribution</CardTitle>
+                <CardDescription className="text-sm">Customer status breakdown and analytics</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col lg:flex-row items-center lg:items-start gap-4 sm:gap-6">
+                  {/* Pie Chart */}
+                  <div className="w-full lg:w-1/2 h-48 sm:h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={reportData.customerReport.customerStatus}
+                          dataKey="count"
+                          nameKey="status"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={40}
+                          outerRadius={70}
+                          fill="#8884d8"
+                          label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                          labelLine={false}
+                        >
+                          {reportData.customerReport.customerStatus.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={CUSTOMER_STATUS_COLORS[index % CUSTOMER_STATUS_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value, name) => [`${value} customers`, name]}
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Stats and Legend */}
+                  <div className="w-full lg:w-1/2 space-y-4 sm:space-y-6">
+                    {/* Key Stats */}
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                      <div className="text-center p-3 sm:p-4 bg-gray-50 rounded-lg">
+                        <div className="text-lg sm:text-2xl font-bold text-gray-900">
+                          {formatNumber(reportData.customerReport.totalCustomers)}
+                        </div>
+                        <div className="text-xs sm:text-sm text-gray-600">Total Customers</div>
+                      </div>
+                      <div className="text-center p-3 sm:p-4 bg-green-50 rounded-lg">
+                        <div className="text-lg sm:text-2xl font-bold text-green-600">
+                          {formatNumber(reportData.customerReport.newCustomers)}
+                        </div>
+                        <div className="text-xs sm:text-sm text-green-600">New This Period</div>
+                      </div>
+                    </div>
+
+                    {/* Detailed Legend */}
+                    <div className="space-y-2 sm:space-y-3">
+                      <h4 className="font-semibold text-gray-900 text-sm sm:text-base">Status Breakdown</h4>
+                      {reportData.customerReport.customerStatus.map((item, index) => {
+                        const percentage = ((item.count / reportData.customerReport.totalCustomers) * 100).toFixed(1);
+                        return (
+                          <div key={index} className="flex items-center justify-between p-2 sm:p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                              <div 
+                                className="w-3 h-3 sm:w-4 sm:h-4 rounded-full flex-shrink-0" 
+                                style={{ backgroundColor: CUSTOMER_STATUS_COLORS[index % CUSTOMER_STATUS_COLORS.length] }}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium capitalize text-gray-900 text-sm sm:text-base truncate">{item.status}</div>
+                                <div className="text-xs sm:text-sm text-gray-500">{percentage}% of total</div>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0 ml-2">
+                              <div className="font-bold text-gray-900 text-sm sm:text-base">{formatNumber(item.count)}</div>
+                              <div className="text-xs text-gray-500">customers</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="services" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Top Services</CardTitle>
+                <CardDescription className="text-sm">Most popular services by revenue</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 sm:space-y-4">
+                  {reportData.serviceReport.topServices.map((service, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{service.name}</p>
+                        <p className="text-sm text-gray-600">{service.orderCount} orders</p>
+                      </div>
+                      <span className="font-bold text-sm sm:text-base ml-2">{formatCurrency(service.revenue)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Service Performance</CardTitle>
+                <CardDescription className="text-sm">Revenue contribution by service</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 sm:space-y-4">
+                  {reportData.serviceReport.servicePerformance.map((service, index) => (
+                    <div key={index} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium truncate">{service.name}</span>
+                        <span className="text-sm font-bold ml-2">{(service.percentage || 0).toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-primary h-2 rounded-full" 
+                          style={{ width: `${service.percentage || 0}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="expenses" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Expenses by Category</CardTitle>
+                <CardDescription className="text-sm">Expense breakdown by category</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 sm:space-y-4">
+                  {reportData.expenseReport.expensesByCategory.map((expense, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                      <span className="font-medium truncate">{expense.category}</span>
+                      <span className="font-bold text-sm sm:text-base ml-2">{formatCurrency(expense.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg">Monthly Expenses</CardTitle>
+                <CardDescription className="text-sm">Expense trends over time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 sm:space-y-4">
+                  {reportData.expenseReport.monthlyExpenses.map((expense, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{expense.month}</span>
+                      <span className="text-sm font-bold">{formatCurrency(expense.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+} 
