@@ -331,14 +331,37 @@ export default function Home() {
 
   const fetchBanners = async () => {
     try {
+      console.log('🎯 Homepage: Starting banner fetch (PRIORITY)...')
       setIsLoadingBanners(true)
-      const response = await fetch('/api/banners?active=true')
+      
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+      
+      const response = await fetch('/api/banners?active=true', {
+        signal: controller.signal,
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Priority': 'high' // Mark as high priority
+        }
+      })
+      
+      clearTimeout(timeoutId)
+      
       const data = await response.json()
       if (data.success) {
+        console.log(`✅ Homepage: Banners loaded successfully (${data.banners.length} items)`)
         setBanners(data.banners)
+      } else {
+        console.error('❌ Homepage: Banner API returned error:', data.message)
       }
     } catch (error) {
-      console.error('Error fetching banners:', error)
+      if (error.name === 'AbortError') {
+        console.error('⏰ Homepage: Banner fetch timeout (>8s)')
+      } else {
+        console.error('❌ Homepage: Error fetching banners:', error)
+      }
+      // Set empty banners to prevent infinite loading
+      setBanners([])
     } finally {
       setIsLoadingBanners(false)
     }

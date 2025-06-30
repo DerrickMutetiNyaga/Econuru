@@ -14,21 +14,54 @@ cloudinary.config({
 // GET all banners
 export const GET = async (request: NextRequest) => {
   try {
+    console.log('🎯 Banner API: Starting fetch...');
+    const startTime = Date.now();
+    
     await connectDB();
+    console.log(`🔗 Banner API: DB connected in ${Date.now() - startTime}ms`);
     
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('active') === 'true';
     
     let query = {};
+    let projection = {};
+    
     if (activeOnly) {
       query = { isActive: true };
+      // Only fetch essential fields for homepage
+      projection = {
+        title: 1,
+        subtitle: 1,
+        description: 1,
+        bannerImage: 1,
+        linkUrl: 1,
+        position: 1,
+        button1: 1,
+        button2: 1,
+        badges: 1,
+        reviewSnippet: 1,
+        _id: 1
+      };
     }
     
-    const banners = await Banner.find(query).sort({ position: 1, createdAt: -1 });
+    const queryStart = Date.now();
+    const banners = await Banner.find(query, projection)
+      .sort({ position: 1, createdAt: -1 })
+      .limit(activeOnly ? 10 : undefined) // Limit active banners for homepage
+      .lean(); // Use lean() for better performance
     
-    return NextResponse.json({ success: true, banners });
+    console.log(`📊 Banner API: Query executed in ${Date.now() - queryStart}ms`);
+    console.log(`✅ Banner API: Total time ${Date.now() - startTime}ms, found ${banners.length} banners`);
+    
+    // Add cache headers for faster loading
+    const response = NextResponse.json({ success: true, banners });
+    if (activeOnly) {
+      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    }
+    
+    return response;
   } catch (error) {
-    console.error('Error fetching banners:', error);
+    console.error('❌ Banner API Error:', error);
     return NextResponse.json(
       { success: false, message: 'Failed to fetch banners' },
       { status: 500 }
