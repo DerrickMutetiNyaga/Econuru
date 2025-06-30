@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { motion, useScroll, useTransform } from "framer-motion"
+import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion"
 import { useInView } from "react-intersection-observer"
 import {
   ShirtIcon,
@@ -141,6 +141,228 @@ interface Banner {
   reviewSnippet?: { rating: number; reviewCount: number; text: string }
 }
 
+// Professional Econuru Preloader Component
+const EconuruPreloader = ({ isLoading }: { isLoading: boolean }) => {
+  const [progress, setProgress] = useState(0)
+  const [loadingStep, setLoadingStep] = useState(0)
+
+  const loadingSteps = [
+    "Initializing Econuru Services...",
+    "Loading premium content...",
+    "Preparing your experience...",
+    "Almost ready to serve you..."
+  ]
+
+  useEffect(() => {
+    if (isLoading) {
+      const progressInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 95) return prev
+          return prev + Math.random() * 20
+        })
+      }, 150)
+
+      const stepInterval = setInterval(() => {
+        setLoadingStep(prev => (prev + 1) % loadingSteps.length)
+      }, 1000)
+
+      return () => {
+        clearInterval(progressInterval)
+        clearInterval(stepInterval)
+      }
+    } else {
+      setProgress(100)
+    }
+  }, [isLoading])
+
+  return (
+    <AnimatePresence>
+      {isLoading && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-white via-blue-50/30 to-purple-50/20"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.8, ease: "easeInOut" }}
+        >
+          {/* Animated Background Pattern */}
+          <div className="absolute inset-0 overflow-hidden">
+            <motion.div
+              className="absolute top-20 left-20 w-32 h-32 rounded-full bg-blue-100/40"
+              animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+              transition={{ duration: 4, repeat: Infinity }}
+            />
+            <motion.div
+              className="absolute bottom-20 right-20 w-24 h-24 rounded-full bg-purple-100/40"
+              animate={{ scale: [1.2, 1, 1.2], opacity: [0.6, 0.3, 0.6] }}
+              transition={{ duration: 3, repeat: Infinity }}
+            />
+            <motion.div
+              className="absolute top-1/2 left-10 w-16 h-16 rounded-full bg-accent/20"
+              animate={{ y: [-20, 20, -20], x: [-10, 10, -10] }}
+              transition={{ duration: 5, repeat: Infinity }}
+            />
+          </div>
+          
+          <div className="relative z-10 text-center max-w-md mx-auto px-6">
+            {/* Econuru Logo Animation */}
+            <motion.div
+              className="mb-8"
+              initial={{ scale: 0.3, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.8, ease: "backOut" }}
+            >
+              {/* Outer rotating ring */}
+              <div className="relative w-28 h-28 mx-auto mb-6">
+                <motion.div
+                  className="absolute inset-0 rounded-full border-4 border-accent/20"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                />
+                <motion.div
+                  className="absolute inset-2 rounded-full border-2 border-purple-300/40"
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+                />
+                
+                {/* Center logo container */}
+                <div className="absolute inset-4 rounded-full bg-white shadow-xl flex items-center justify-center">
+                  <motion.div
+                    initial={{ scale: 0, rotate: -180 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ duration: 1, delay: 0.3, ease: "backOut" }}
+                  >
+                    <Sparkles className="w-10 h-10 text-accent" />
+                  </motion.div>
+                </div>
+                
+                {/* Floating particles */}
+                {[0, 1, 2, 3].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute w-2 h-2 rounded-full bg-accent/60"
+                    style={{
+                      top: '50%',
+                      left: '50%',
+                      transformOrigin: `${40 + i * 5}px 0px`,
+                    }}
+                    animate={{ rotate: 360 }}
+                    transition={{
+                      duration: 4 + i,
+                      repeat: Infinity,
+                      ease: "linear",
+                      delay: i * 0.5
+                    }}
+                  />
+                ))}
+              </div>
+              
+              {/* Econuru Brand Text */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.6 }}
+              >
+                <h1 className="text-4xl font-playfair font-bold text-gray-800 mb-2 tracking-wide">
+                  Econuru
+                </h1>
+                <p className="text-accent font-medium text-sm tracking-wider uppercase">
+                  Premium Laundry Services
+                </p>
+              </motion.div>
+            </motion.div>
+
+            {/* Loading Progress */}
+            <motion.div
+              className="mb-8"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, delay: 1 }}
+            >
+              {/* Progress Bar */}
+              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-4 shadow-inner">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-accent via-purple-500 to-accent bg-size-200 rounded-full"
+                  initial={{ width: "0%" }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.3 }}
+                  style={{
+                    backgroundSize: "200% 100%",
+                  }}
+                />
+              </div>
+              
+              {/* Progress Percentage */}
+              <div className="text-right mb-3">
+                <span className="text-sm font-semibold text-gray-600">
+                  {Math.round(progress)}%
+                </span>
+              </div>
+            </motion.div>
+
+            {/* Loading Steps */}
+            <motion.div
+              className="min-h-[60px] flex items-center justify-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 1.2 }}
+            >
+              <motion.p
+                key={loadingStep}
+                className="text-gray-700 text-base font-medium"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.5 }}
+              >
+                {loadingSteps[loadingStep]}
+              </motion.p>
+            </motion.div>
+
+            {/* Animated dots */}
+            <motion.div
+              className="flex justify-center space-x-2 mt-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 1.4 }}
+            >
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="w-3 h-3 rounded-full bg-accent"
+                  animate={{
+                    scale: [1, 1.3, 1],
+                    opacity: [0.4, 1, 0.4],
+                  }}
+                  transition={{
+                    duration: 1.2,
+                    repeat: Infinity,
+                    delay: i * 0.2,
+                  }}
+                />
+              ))}
+            </motion.div>
+
+            {/* Quality Badge */}
+            <motion.div
+              className="mt-8 inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full shadow-md"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, delay: 1.6 }}
+            >
+              <div className="flex">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star key={star} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                ))}
+              </div>
+              <span className="text-xs font-medium text-gray-600">Premium Quality</span>
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 export default function Home() {
   const [scrollY, setScrollY] = useState(0)
   const [featuredServices, setFeaturedServices] = useState<Service[]>([])
@@ -157,6 +379,10 @@ export default function Home() {
   const [banners, setBanners] = useState<Banner[]>([])
   const [currentBanner, setCurrentBanner] = useState(0)
   const [isLoadingBanners, setIsLoadingBanners] = useState(true)
+  
+  // Page loading state for preloader
+  const [isPageLoading, setIsPageLoading] = useState(true)
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false)
 
   const [heroRef, heroInView] = useInView({
     triggerOnce: true,
@@ -223,25 +449,47 @@ export default function Home() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Priority loading for banners (hero section) - load immediately and independently
+  // Initial page loading sequence
   useEffect(() => {
-    fetchBanners()
+    const initializePage = async () => {
+      setIsPageLoading(true)
+      
+      try {
+        // Load critical content first (banners for hero section)
+        await fetchBanners()
+        
+        // Small delay for smooth UX
+        setTimeout(() => {
+          setInitialLoadComplete(true)
+          setIsPageLoading(false)
+          
+          // Load secondary content in background
+          loadSecondaryContent()
+        }, 1200) // Minimum loading time for smooth experience
+        
+      } catch (error) {
+        console.error('Error during initial load:', error)
+        setIsPageLoading(false)
+        setInitialLoadComplete(true)
+      }
+    }
+    
+    initializePage()
   }, [])
 
-  // Parallel loading for other sections - load simultaneously for better performance
-  useEffect(() => {
-    const loadOtherSections = async () => {
-      // Load all other sections in parallel instead of sequentially
+  // Load secondary content after main page is shown
+  const loadSecondaryContent = async () => {
+    try {
       await Promise.allSettled([
         fetchFeaturedServices(),
         fetchTestimonials(),
         fetchPromotions(),
         fetchGalleryItems()
       ])
+    } catch (error) {
+      console.error('Error loading secondary content:', error)
     }
-    
-    loadOtherSections()
-  }, [])
+  }
 
   const fetchFeaturedServices = async () => {
     try {
@@ -329,41 +577,54 @@ export default function Home() {
     }
   }
 
-  const fetchBanners = async () => {
+  const fetchBanners = async (retryCount = 0) => {
     try {
-      console.log('🎯 Homepage: Starting banner fetch (PRIORITY)...')
+      console.log(`🚀 Homepage: Banner fetch attempt ${retryCount + 1}...`)
       setIsLoadingBanners(true)
       
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
-      
       const response = await fetch('/api/banners?active=true', {
-        signal: controller.signal,
         headers: {
           'Cache-Control': 'no-cache',
-          'Priority': 'high' // Mark as high priority
+          'Priority': 'high'
         }
       })
       
-      clearTimeout(timeoutId)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
       
       const data = await response.json()
-      if (data.success) {
-        console.log(`✅ Homepage: Banners loaded successfully (${data.banners.length} items)`)
+      if (data.success && data.banners.length > 0) {
+        console.log(`✅ SUCCESS: Banners loaded in ${retryCount + 1} attempts (${data.banners.length} items)`)
         setBanners(data.banners)
+        setIsLoadingBanners(false)
+        return // Success - stop retrying
       } else {
-        console.error('❌ Homepage: Banner API returned error:', data.message)
+        throw new Error('No banners found in response')
       }
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.error('⏰ Homepage: Banner fetch timeout (>8s)')
+      console.error(`❌ Banner fetch attempt ${retryCount + 1} failed:`, error)
+      
+      // Retry logic - keep trying until success
+      if (retryCount < 10) { // Max 10 retries
+        const delay = Math.min(1000 * Math.pow(1.5, retryCount), 5000) // Exponential backoff, max 5s
+        console.log(`🔄 Retrying in ${delay}ms... (attempt ${retryCount + 2}/10)`)
+        
+        setTimeout(() => {
+          fetchBanners(retryCount + 1)
+        }, delay)
       } else {
-        console.error('❌ Homepage: Error fetching banners:', error)
+        console.error('💥 All banner fetch attempts failed - using fallback')
+        setBanners([{
+          _id: 'fallback',
+          title: 'Premium Laundry Services',
+          description: 'Experience the finest in garment care with our professional laundry and dry cleaning services. We deliver quality that exceeds expectations.',
+          bannerImage: '/placeholder.jpg',
+          isActive: true,
+          position: 1
+        }])
+        setIsLoadingBanners(false)
       }
-      // Set empty banners to prevent infinite loading
-      setBanners([])
-    } finally {
-      setIsLoadingBanners(false)
     }
   }
 
@@ -466,10 +727,22 @@ export default function Home() {
   const displayTestimonials = testimonials
 
   return (
-    <div className="min-h-screen bg-white">
-      <Navbar />
+    <>
+      {/* Econuru Preloader */}
+      <EconuruPreloader isLoading={isPageLoading} />
+      
+      {/* Main Page Content */}
+      <AnimatePresence>
+        {!isPageLoading && (
+          <motion.div
+            className="min-h-screen bg-white"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+          >
+            <Navbar />
 
-      {/* Dynamic Hero/Banner Section (restored original layout) */}
+            {/* Dynamic Hero/Banner Section */}
       <motion.section
         ref={heroRef}
         className="relative pt-24 pb-20 overflow-hidden"
@@ -477,13 +750,8 @@ export default function Home() {
         animate={heroInView ? { opacity: 1 } : {}}
         transition={{ duration: 0.8 }}
       >
-        <div className="container px-4 md:px-6">
-          {isLoadingBanners ? (
-            <div className="flex items-center justify-center h-96">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2">Loading banners...</span>
-            </div>
-          ) : banners.length > 0 ? (
+                      <div className="container px-4 md:px-6">
+                {banners.length > 0 ? (
             <div className="relative">
               <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 items-center">
                 {/* Banner Content */}
@@ -948,7 +1216,10 @@ export default function Home() {
         </div>
       </section>
 
-      <Footer />
-    </div>
+                  <Footer />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   )
 }

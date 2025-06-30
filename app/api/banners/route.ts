@@ -14,52 +14,59 @@ cloudinary.config({
 // GET all banners
 export const GET = async (request: NextRequest) => {
   try {
-    console.log('🎯 Banner API: Starting fetch...');
+    console.log('🚀 FAST Banner API: Starting...');
     const startTime = Date.now();
-    
-    await connectDB();
-    console.log(`🔗 Banner API: DB connected in ${Date.now() - startTime}ms`);
     
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('active') === 'true';
     
-    let query = {};
-    let projection = {};
-    
+    // Ultra-fast DB connection and query for homepage banners
     if (activeOnly) {
-      query = { isActive: true };
-      // Only fetch essential fields for homepage
-      projection = {
-        title: 1,
-        subtitle: 1,
-        description: 1,
-        bannerImage: 1,
-        linkUrl: 1,
-        position: 1,
-        button1: 1,
-        button2: 1,
-        badges: 1,
-        reviewSnippet: 1,
-        _id: 1
-      };
+      await connectDB();
+      const connectTime = Date.now() - startTime;
+      
+      // Optimized query for homepage - only essential fields
+      const queryStart = Date.now();
+      const banners = await Banner.find(
+        { isActive: true },
+        {
+          title: 1,
+          description: 1,
+          bannerImage: 1,
+          position: 1,
+          button1: 1,
+          button2: 1,
+          badges: 1,
+          reviewSnippet: 1,
+          _id: 1
+        }
+      )
+      .sort({ position: 1 })
+      .limit(5) // Only first 5 banners for speed
+      .lean()
+      .hint({ isActive: 1, position: 1 }); // Use index hint
+      
+      const queryTime = Date.now() - queryStart;
+      console.log(`⚡ FAST Banner API: DB(${connectTime}ms) + Query(${queryTime}ms) = ${Date.now() - startTime}ms TOTAL`);
+      
+      // Aggressive caching for homepage banners
+      const response = NextResponse.json({ success: true, banners });
+      response.headers.set('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1800');
+      response.headers.set('CDN-Cache-Control', 'public, s-maxage=600');
+      response.headers.set('Vercel-CDN-Cache-Control', 'public, s-maxage=600');
+      
+      return response;
     }
     
-    const queryStart = Date.now();
-    const banners = await Banner.find(query, projection)
+    // Regular query for admin panel
+    await connectDB();
+    const banners = await Banner.find({})
       .sort({ position: 1, createdAt: -1 })
-      .limit(activeOnly ? 10 : undefined) // Limit active banners for homepage
-      .lean(); // Use lean() for better performance
+      .lean();
     
-    console.log(`📊 Banner API: Query executed in ${Date.now() - queryStart}ms`);
-    console.log(`✅ Banner API: Total time ${Date.now() - startTime}ms, found ${banners.length} banners`);
+    console.log(`✅ Banner API: Found ${banners.length} banners in ${Date.now() - startTime}ms`);
+    return NextResponse.json({ success: true, banners });
     
-    // Add cache headers for faster loading
-    const response = NextResponse.json({ success: true, banners });
-    if (activeOnly) {
-      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-    }
-    
-    return response;
   } catch (error) {
     console.error('❌ Banner API Error:', error);
     return NextResponse.json(

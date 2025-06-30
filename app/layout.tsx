@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { WhatsAppWidget } from "@/components/whatsapp-widget"
 import { AuthProvider } from "@/hooks/useAuth"
 import { Toaster } from "@/components/ui/toaster"
+import { PWASetup } from "@/components/pwa-setup"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -32,7 +33,19 @@ export const metadata: Metadata = {
   title: "Econuru laundry Services | Ultra-Premium Laundry Experience",
   description:
     "Experience the luxury of premium laundry services with Econuru laundry. We redefine cleanliness with our premium dry cleaning and express wash services.",
-    generator: 'v0.dev'
+      generator: 'v0.dev',
+    manifest: '/manifest.json',
+    appleWebApp: {
+      capable: true,
+    statusBarStyle: 'default',
+    title: 'Econuru'
+  }
+}
+
+export function generateViewport() {
+  return {
+    themeColor: '#6366f1',
+  }
 }
 
 export default function RootLayout({
@@ -48,6 +61,7 @@ export default function RootLayout({
             {children}
             <WhatsAppWidget />
             <Toaster />
+            <PWASetup />
           </AuthProvider>
         </ThemeProvider>
       </body>
