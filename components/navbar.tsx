@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { ShirtIcon, Menu, X, User, ShoppingBag, Phone, MapPin } from "lucide-react"
 
@@ -55,13 +56,16 @@ export function Navbar() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-2 group">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                <ShirtIcon className="w-5 h-5 text-white" />
+            <Link href="/" className="flex items-center group">
+              <div className="h-12 group-hover:scale-110 transition-transform duration-200">
+                <Image 
+                  src="/econurulogo.svg" 
+                  alt="Eco Nuru Logo" 
+                  width={144} 
+                  height={48} 
+                  className="object-contain h-full w-auto"
+                />
               </div>
-              <span className="font-playfair font-bold text-lg sm:text-xl group-hover:text-primary transition-colors">
-                Eco Nuru
-              </span>
             </Link>
 
             {/* Desktop Navigation */}
@@ -100,7 +104,7 @@ export function Navbar() {
                 </Button>
               </Link>
               <Link href="/book">
-                <Button className="bg-[#e2b15b] hover:bg-[#c9982a] text-white rounded-xl px-6 py-2 font-semibold shadow transition-colors">
+                <Button className="bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-xl px-6 py-2 font-semibold shadow transition-colors">
                   Book Now
                 </Button>
               </Link>
@@ -131,11 +135,16 @@ export function Navbar() {
           >
             {/* Mobile Header */}
             <div className="container mx-auto px-4 py-5 flex items-center justify-between border-b">
-              <Link href="/" className="flex items-center gap-2" onClick={() => setIsMobileMenuOpen(false)}>
-                <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                  <ShirtIcon className="w-5 h-5 text-white" />
+              <Link href="/" className="flex items-center" onClick={() => setIsMobileMenuOpen(false)}>
+                <div className="h-12">
+                  <Image 
+                    src="/econurulogo.svg" 
+                    alt="Eco Nuru Logo" 
+                    width={144} 
+                    height={48} 
+                    className="object-contain h-full w-auto"
+                  />
                 </div>
-                <span className="font-playfair font-bold text-xl">Eco Nuru</span>
               </Link>
 
               <Button 
@@ -203,7 +212,7 @@ export function Navbar() {
                 
                 <Link href="/book">
                   <Button 
-                    className="bg-[#e2b15b] hover:bg-[#c9982a] text-white rounded-xl w-full max-w-xs py-3"
+                    className="bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-xl w-full max-w-xs py-3"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Book Now

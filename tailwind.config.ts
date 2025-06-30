@@ -34,7 +34,7 @@ const config = {
           foreground: "hsl(var(--secondary-foreground))",
         },
         accent: {
-          DEFAULT: "#D6A44F",
+          DEFAULT: "#2E7D32",
           foreground: "hsl(var(--accent-foreground))",
         },
         destructive: {
@@ -108,7 +108,7 @@ const config = {
         float: "float 6s infinite ease-in-out",
       },
       backgroundImage: {
-        "gradient-luxury": "linear-gradient(135deg, #3C9D9B, #D6A44F)",
+        "gradient-luxury": "linear-gradient(135deg, #3C9D9B, #2E7D32)",
       },
     },
   },

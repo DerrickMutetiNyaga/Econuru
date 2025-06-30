@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { ShirtIcon, Mail, Phone, MapPin, Instagram, Facebook, Twitter } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -10,11 +11,16 @@ export function Footer() {
       <div className="container px-4 md:px-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           <div>
-            <Link href="/" className="flex items-center gap-2 mb-6">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                <ShirtIcon className="w-5 h-5 text-white" />
+            <Link href="/" className="flex items-center mb-6">
+              <div className="h-12">
+                <Image 
+                  src="/econurulogo.svg" 
+                  alt="Eco Nuru Logo" 
+                  width={144} 
+                  height={48} 
+                  className="object-contain h-full w-auto"
+                />
               </div>
-              <span className="font-playfair font-bold text-xl">Eco Nuru Services</span>
             </Link>
             <p className="text-text-light mb-4">
               For years we've been there for your laundry needs. Now it's no longer just about laundry but the whole home care revolution. Your go-to premium service of choice.

@@ -1265,9 +1265,9 @@ Need help? Call us at +254 757 883 799`;
                       disabled={promoLoading}
                     />
                     {promoLoading && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <Loader2 className="h-4 w-4 animate-spin text-[#e2b15b]" />
-                      </div>
+                                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Loader2 className="h-4 w-4 animate-spin text-[#2E7D32]" />
+                        </div>
                     )}
                     {lockedPromotion && !promoLoading && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">

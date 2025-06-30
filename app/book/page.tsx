@@ -276,7 +276,7 @@ export default function BookPage() {
               <div className="flex items-center mb-8">
                 {["Personal Details", "What You Need", "Finish"].map((label, idx) => (
                   <div key={label} className="flex-1 flex flex-col items-center">
-                    <div className={`w-8 h-8 flex items-center justify-center rounded-full border-2 ${step > idx ? 'bg-[#38a3a5] border-[#38a3a5] text-white' : step === idx+1 ? 'bg-white border-[#e2b15b] text-[#e2b15b]' : 'bg-white border-[#b2f2e9] text-[#b2f2e9]'} font-bold text-lg transition-all`}>{idx+1}</div>
+                    <div className={`w-8 h-8 flex items-center justify-center rounded-full border-2 ${step > idx ? 'bg-[#38a3a5] border-[#38a3a5] text-white' : step === idx+1 ? 'bg-white border-[#2E7D32] text-[#2E7D32]' : 'bg-white border-[#b2f2e9] text-[#b2f2e9]'} font-bold text-lg transition-all`}>{idx+1}</div>
                     <span className={`mt-2 text-xs font-semibold ${step === idx+1 ? 'text-[#38a3a5]' : 'text-gray-400'}`}>{label}</span>
                   </div>
                 ))}
@@ -295,7 +295,7 @@ export default function BookPage() {
                         required
                         value={form.name}
                         onChange={handleChange}
-                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm placeholder:text-[#7bbcb7]"
+                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm placeholder:text-[#7bbcb7]"
                         placeholder="Your Name"
                       />
                       {errors.name && <p className="text-red-500 text-sm mt-1 ml-2">{errors.name}</p>}
@@ -308,7 +308,7 @@ export default function BookPage() {
                         required
                         value={form.phone}
                         onChange={handleChange}
-                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm placeholder:text-[#7bbcb7]"
+                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm placeholder:text-[#7bbcb7]"
                         placeholder="e.g. 0712 345 678"
                       />
                       {errors.phone && <p className="text-red-500 text-sm mt-1 ml-2">{errors.phone}</p>}
@@ -320,7 +320,7 @@ export default function BookPage() {
                         name="email"
                         value={form.email}
                         onChange={handleChange}
-                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm placeholder:text-[#7bbcb7]"
+                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm placeholder:text-[#7bbcb7]"
                         placeholder="you@email.com"
                       />
                     </div>
@@ -332,7 +332,7 @@ export default function BookPage() {
                         required
                         value={form.address}
                         onChange={handleChange}
-                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm placeholder:text-[#7bbcb7]"
+                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm placeholder:text-[#7bbcb7]"
                         placeholder="Where should we pick up?"
                       />
                       {errors.address && <p className="text-red-500 text-sm mt-1 ml-2">{errors.address}</p>}
@@ -399,12 +399,12 @@ export default function BookPage() {
                           }),
                           multiValueRemove: (base) => ({
                             ...base,
-                            color: '#e2b15b',
-                            ':hover': { background: '#ffe6a7', color: '#b8860b' },
+                            color: '#2E7D32',
+                            ':hover': { background: '#E8F5E8', color: '#1B5E20' },
                           }),
                           option: (base, state) => ({
                             ...base,
-                            background: state.isSelected ? '#e2b15b' : state.isFocused ? '#f6fffc' : '#fff',
+                            background: state.isSelected ? '#2E7D32' : state.isFocused ? '#f6fffc' : '#fff',
                             color: state.isSelected ? '#fff' : '#222',
                           }),
                         }}
@@ -419,7 +419,7 @@ export default function BookPage() {
                           name="laundryBag"
                           value={form.laundryBag}
                           onChange={handleChange}
-                          className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm"
+                          className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm"
                         >
                           <option value="">Select laundry bag option</option>
                           <option value="I have my own laundry bag">I have my own laundry bag</option>
@@ -441,7 +441,7 @@ export default function BookPage() {
                           min={0}
                           value={form.baskets}
                           onChange={handleChange}
-                          className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm"
+                          className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm"
                           placeholder="Enter number of baskets"
                         />
                       </div>
@@ -478,31 +478,31 @@ export default function BookPage() {
                         name="moreInfo"
                         value={form.moreInfo}
                         onChange={handleChange}
-                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm"
+                        className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm"
                         placeholder="Any extra details about your laundry, access, etc."
                       />
                     </div>
                     {/* Promo Code Field */}
                     <div className="relative">
-                      <FaHashtag className="absolute left-3 top-1/2 -translate-y-1/2 text-[#e2b15b] text-lg" />
+                      <FaHashtag className="absolute left-3 top-1/2 -translate-y-1/2 text-[#2E7D32] text-lg" />
                       <input
                         type="text"
                         name="promoCode"
                         value={form.promoCode}
                         onChange={handleChange}
-                        className={`w-full pl-10 rounded-2xl border px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm ${
+                        className={`w-full pl-10 rounded-2xl border px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm ${
                           promoValid === true 
                             ? 'border-green-500 bg-green-50' 
                             : promoValid === false 
                             ? 'border-red-500 bg-red-50' 
-                            : 'border-[#e2b15b] bg-[#fff7e6]'
+                            : 'border-[#2E7D32] bg-[#E8F5E8]'
                         }`}
                         placeholder="Promo code (optional)"
                         autoComplete="off"
                       />
                       {promoLoading && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                          <Loader2 className="h-4 w-4 animate-spin text-[#e2b15b]" />
+                          <Loader2 className="h-4 w-4 animate-spin text-[#2E7D32]" />
                         </div>
                       )}
                     </div>
@@ -524,7 +524,7 @@ export default function BookPage() {
                           required
                           value={form.date}
                           onChange={handleChange}
-                          className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm"
+                          className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm"
                         />
                         {errors.date && <p className="text-red-500 text-sm mt-1 ml-2">{errors.date}</p>}
                       </div>
@@ -540,7 +540,7 @@ export default function BookPage() {
                           required
                           value={form.time}
                           onChange={handleChange}
-                          className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#e2b15b] shadow-sm"
+                          className="w-full pl-10 rounded-2xl border border-[#38a3a5] bg-[#f6fffc] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2E7D32] shadow-sm"
                         />
                         {errors.time && <p className="text-red-500 text-sm mt-1 ml-2">{errors.time}</p>}
                       </div>
@@ -551,12 +551,12 @@ export default function BookPage() {
               {/* Navigation Buttons */}
               <div className="flex justify-between mt-10">
                 {step > 1 ? (
-                  <button type="button" onClick={prevStep} className="px-8 py-3 rounded-2xl border-2 border-[#e2b15b] text-[#e2b15b] font-bold bg-white shadow hover:bg-[#fff7e6] transition-colors">Back</button>
+                  <button type="button" onClick={prevStep} className="px-8 py-3 rounded-2xl border-2 border-[#2E7D32] text-[#2E7D32] font-bold bg-white shadow hover:bg-[#E8F5E8] transition-colors">Back</button>
                 ) : <div />}
                 {step < 3 ? (
-                  <button type="button" onClick={nextStep} className="px-8 py-3 rounded-2xl bg-gradient-to-r from-[#e2b15b] to-[#ffe6a7] text-white font-bold shadow hover:from-[#ffe6a7] hover:to-[#e2b15b] hover:text-[#b8860b] transition-colors">Next</button>
+                  <button type="button" onClick={nextStep} className="px-8 py-3 rounded-2xl bg-gradient-to-r from-[#2E7D32] to-[#4CAF50] text-white font-bold shadow hover:from-[#4CAF50] hover:to-[#2E7D32] hover:text-white transition-colors">Next</button>
                 ) : (
-                  <button type="submit" className="px-8 py-3 rounded-2xl bg-gradient-to-r from-[#e2b15b] to-[#ffe6a7] text-white font-bold shadow hover:from-[#ffe6a7] hover:to-[#e2b15b] hover:text-[#b8860b] transition-colors flex items-center justify-center" disabled={isBooking}>
+                  <button type="submit" className="px-8 py-3 rounded-2xl bg-gradient-to-r from-[#2E7D32] to-[#4CAF50] text-white font-bold shadow hover:from-[#4CAF50] hover:to-[#2E7D32] hover:text-white transition-colors flex items-center justify-center" disabled={isBooking}>
                     {isBooking && <Loader2 className="animate-spin h-5 w-5 mr-2" />}
                     {isBooking ? 'Booking...' : 'Book Now'}
                   </button>

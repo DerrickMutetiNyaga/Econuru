@@ -230,8 +230,18 @@ const EconuruPreloader = ({ isLoading }: { isLoading: boolean }) => {
                     initial={{ scale: 0, rotate: -180 }}
                     animate={{ scale: 1, rotate: 0 }}
                     transition={{ duration: 1, delay: 0.3, ease: "backOut" }}
+                    className="w-10 h-10"
                   >
-                    <Sparkles className="w-10 h-10 text-accent" />
+                    <svg viewBox="0 0 310.71 229.22" className="w-full h-full">
+                      <g>
+                        <polygon fill="#2E7D32" points="310.71 114.62 310.71 221.29 288.86 221.29 288.86 118.29 160.78 31.77 11.79 132.41 0 108.52 39.37 81.92 38.78 81.92 38.78 36.53 68.8 36.53 68.8 62.03 160.64 0 160.78 .26 160.9 0 288.86 86.44 289.91 87.16 310.71 114.62"/>
+                        <g>
+                          <circle fill="#2E7D32" cx="152.4" cy="181.83" r="47.39"/>
+                          <circle fill="#2E7D32" cx="141.16" cy="97.39" r="28.57"/>
+                          <circle fill="#2E7D32" cx="193.55" cy="110.29" r="12.15"/>
+                        </g>
+                      </g>
+                    </svg>
                   </motion.div>
                 </div>
                 
