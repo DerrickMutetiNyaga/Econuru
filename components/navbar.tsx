@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
-import { ShirtIcon, Menu, X, User, ShoppingBag, Phone, MapPin } from "lucide-react"
+import { ShirtIcon, Menu, X, User, ShoppingBag, Phone, MapPin, Home, Grid3X3, Download, Calendar, MessageCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
@@ -12,6 +12,9 @@ export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isContactVisible, setIsContactVisible] = useState(false)
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [showInstallButton, setShowInstallButton] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -22,16 +25,50 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Show contact info on larger screens
+  // Show contact info on larger screens and detect mobile
   useEffect(() => {
     const handleResize = () => {
       setIsContactVisible(window.innerWidth >= 768)
+      setIsMobile(window.innerWidth < 768)
     }
     
     handleResize()
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
   }, [])
+
+  // PWA Install functionality
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+      setShowInstallButton(true)
+    }
+
+    const handleAppInstalled = () => {
+      setShowInstallButton(false)
+      setDeferredPrompt(null)
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+    }
+  }, [])
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt()
+      const choiceResult = await deferredPrompt.userChoice
+      if (choiceResult.outcome === 'accepted') {
+        setShowInstallButton(false)
+      }
+      setDeferredPrompt(null)
+    }
+  }
 
   const navLinks = [
     { title: "Home", href: "/" },
@@ -41,10 +78,19 @@ export function Navbar() {
     { title: "Contact Us", href: "/contact" },
   ]
 
+  const mobileNavItems = [
+    { title: "Home", href: "/", icon: Home },
+    { title: "Services", href: "/services", icon: Grid3X3 },
+    { title: "Book", href: "/book", icon: Calendar },
+    { title: "Gallery", href: "/gallery", icon: ShoppingBag },
+    { title: "Contact", href: "/contact", icon: MessageCircle },
+  ]
+
   return (
     <>
+      {/* Desktop Header */}
       <motion.header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isMobile ? 'hidden' : ''} ${
           isScrolled 
             ? "bg-gray-50/95 backdrop-blur-md luxury-shadow py-4" 
             : "bg-gray-50/90 backdrop-blur-sm py-5"
@@ -230,6 +276,166 @@ export function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Mobile Bottom Navigation */}
+      {isMobile && (
+        <motion.div
+          className="fixed bottom-0 left-0 right-0 z-50"
+          initial={{ y: 100 }}
+          animate={{ y: 0 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
+          {/* Background with notch for bubble */}
+          <div className="relative bg-white border-t border-gray-200 shadow-lg pb-2">
+            {/* Main navigation container */}
+            <div className="flex items-end justify-around pt-2 pb-1 px-4">
+              {/* Left side nav items */}
+              <Link
+                href="/"
+                className="flex flex-col items-center justify-center py-1 group active:bg-gray-50 rounded-lg px-3 transition-all"
+              >
+                <Home className="w-5 h-5 text-gray-600 group-hover:text-[#2E7D32] transition-colors" />
+                <span className="text-xs text-gray-600 group-hover:text-[#2E7D32] transition-colors mt-1 font-medium">
+                  Home
+                </span>
+              </Link>
+
+              <Link
+                href="/services"
+                className="flex flex-col items-center justify-center py-1 group active:bg-gray-50 rounded-lg px-3 transition-all"
+              >
+                <Grid3X3 className="w-5 h-5 text-gray-600 group-hover:text-[#2E7D32] transition-colors" />
+                <span className="text-xs text-gray-600 group-hover:text-[#2E7D32] transition-colors mt-1 font-medium">
+                  Services
+                </span>
+              </Link>
+
+              {/* Center bubble button */}
+              <motion.div
+                className="relative flex flex-col items-center -mt-8"
+                initial={{ scale: 0, y: 30 }}
+                animate={{ scale: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2, type: "spring", stiffness: 150, damping: 8 }}
+              >
+                <Link
+                  href="/book"
+                  className="group relative"
+                >
+                  {/* Outer glow effect */}
+                  <div className="absolute -inset-2 bg-[#2E7D32] rounded-full blur-lg opacity-20 group-active:opacity-30 transition-opacity"></div>
+                  
+                  {/* Middle bubble effect */}
+                  <div className="absolute -inset-1 bg-[#2E7D32] rounded-full blur-md opacity-25 group-active:scale-110 transition-transform"></div>
+                  
+                  {/* Main button with enhanced shadow */}
+                  <div className="relative w-14 h-14 bg-gradient-to-br from-[#2E7D32] via-[#2E7D32] to-[#1B5E20] rounded-full flex items-center justify-center shadow-2xl border-2 border-white group-active:scale-95 transition-all">
+                    {/* Inner glow */}
+                    <div className="absolute inset-1 bg-gradient-to-br from-white/20 to-transparent rounded-full"></div>
+                    <ShirtIcon className="w-6 h-6 text-white relative z-10" />
+                  </div>
+                  
+                  {/* Button label with enhanced styling */}
+                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-white rounded-full px-3 py-1 shadow-lg border border-gray-200">
+                    <span className="text-xs font-bold text-[#2E7D32] whitespace-nowrap">
+                      Book
+                    </span>
+                  </div>
+                </Link>
+              </motion.div>
+
+              {/* Right side nav items */}
+              <Link
+                href="/gallery"
+                className="flex flex-col items-center justify-center py-1 group active:bg-gray-50 rounded-lg px-3 transition-all"
+              >
+                <ShoppingBag className="w-5 h-5 text-gray-600 group-hover:text-[#2E7D32] transition-colors" />
+                <span className="text-xs text-gray-600 group-hover:text-[#2E7D32] transition-colors mt-1 font-medium">
+                  Gallery
+                </span>
+              </Link>
+
+              <Link
+                href="/contact"
+                className="flex flex-col items-center justify-center py-1 group active:bg-gray-50 rounded-lg px-3 transition-all"
+              >
+                <MessageCircle className="w-5 h-5 text-gray-600 group-hover:text-[#2E7D32] transition-colors" />
+                <span className="text-xs text-gray-600 group-hover:text-[#2E7D32] transition-colors mt-1 font-medium">
+                  Contact
+                </span>
+              </Link>
+            </div>
+
+            {/* Safe area for home indicator */}
+            <div className="h-1"></div>
+          </div>
+          
+          {/* PWA Install Button */}
+          {showInstallButton && (
+            <motion.div
+              className="absolute -top-16 right-4 z-10"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3, delay: 0.5 }}
+            >
+              <Button
+                onClick={handleInstallClick}
+                className="bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-full w-12 h-12 p-0 shadow-lg"
+                title="Install App"
+              >
+                <Download className="w-5 h-5" />
+              </Button>
+            </motion.div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Mobile Top Header (Simplified) */}
+      {isMobile && (
+        <motion.div
+          className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-200"
+          initial={{ y: -100 }}
+          animate={{ y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-center justify-between px-4 py-3">
+            <Link href="/" className="flex items-center">
+              <div className="h-8">
+                <Image 
+                  src="/econurulogo.svg" 
+                  alt="Eco Nuru Logo" 
+                  width={96} 
+                  height={32} 
+                  className="object-contain h-full w-auto"
+                />
+              </div>
+            </Link>
+            
+            <div className="flex items-center gap-2">
+              {showInstallButton && (
+                <Button
+                  onClick={handleInstallClick}
+                  variant="ghost"
+                  size="sm"
+                  className="text-[#2E7D32] hover:bg-[#2E7D32]/10"
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  Install
+                </Button>
+              )}
+              <Link href="/account">
+                <Button variant="ghost" size="icon" className="rounded-full hover:bg-primary/10">
+                  <User className="w-5 h-5" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Mobile Content Padding */}
+      {isMobile && (
+        <div className="h-14 bg-transparent"></div>
+      )}
     </>
   )
 }
