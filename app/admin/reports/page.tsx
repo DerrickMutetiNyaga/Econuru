@@ -246,272 +246,285 @@ export default function ReportsPage() {
     // Create a new workbook
     const workbook = XLSX.utils.book_new();
 
-    // 1. SUMMARY SHEET
+    // 1. EXECUTIVE SUMMARY SHEET
     const summaryData = [
-      ['ECONURU LAUNDRY SERVICES'],
-      ['Comprehensive Business Report'],
-      [`Generated: ${new Date().toLocaleDateString('en-KE')}`],
+      ['ECONURU LAUNDRY SERVICES - EXECUTIVE SUMMARY'],
+      [`Report Generated: ${new Date().toLocaleDateString('en-KE')}`],
       [`Period: Last ${dateRange} days`],
       [''],
-      ['=== EXECUTIVE SUMMARY ==='],
+      ['=== FINANCIAL OVERVIEW ==='],
+      ['Metric', 'Value'],
       ['Total Revenue', formatCurrency(reportData.salesReport.totalRevenue)],
-      ['Total Orders', reportData.salesReport.totalOrders.toLocaleString()],
-      ['Average Order Value', formatCurrency(reportData.salesReport.averageOrderValue)],
-      ['Total Customers', reportData.customerReport.totalCustomers.toLocaleString()],
-      ['New Customers', reportData.customerReport.newCustomers.toLocaleString()],
       ['Total Expenses', formatCurrency(reportData.expenseReport.totalExpenses)],
       ['Net Profit', formatCurrency(reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses)],
       ['Profit Margin', `${reportData.salesReport.totalRevenue > 0 ? ((reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses) / reportData.salesReport.totalRevenue * 100).toFixed(2) : 0}%`],
       [''],
-      ['=== UNPAID ORDERS SUMMARY ==='],
-      ['Total Unpaid Orders', reportData.detailedData.unpaidOrdersCount.toLocaleString()],
+      ['=== ORDERS SUMMARY ==='],
+      ['Total Orders', reportData.salesReport.totalOrders.toLocaleString()],
+      ['Paid Orders', reportData.detailedData.ordersList.filter(order => order.paymentStatus === 'paid').length.toLocaleString()],
+      ['Unpaid Orders', reportData.detailedData.unpaidOrdersCount.toLocaleString()],
+      ['Average Order Value', formatCurrency(reportData.salesReport.averageOrderValue)],
+      [''],
+      ['=== CUSTOMER SUMMARY ==='],
+      ['Total Customers', reportData.customerReport.totalCustomers.toLocaleString()],
+      ['New Customers', reportData.customerReport.newCustomers.toLocaleString()],
+      ['Customer Retention', `${reportData.customerReport.customerRetentionRate || 0}%`],
+      [''],
+      ['=== UNPAID ORDERS ALERT ==='],
       ['Total Unpaid Amount', formatCurrency(reportData.detailedData.totalUnpaidAmount)],
-      [''],
-      ['=== PAYMENT STATUS BREAKDOWN ==='],
-      ...reportData.paymentStatusAmountPie.map(payment => [
-        `${payment.status.charAt(0).toUpperCase() + payment.status.slice(1)} Orders`,
-        formatCurrency(payment.amount)
-      ]),
-      [''],
-      ['=== TOP SERVICES ==='],
-      ...reportData.serviceReport.topServices.slice(0, 10).map(service => [
-        service.name,
-        formatCurrency(service.revenue),
-        `${service.orderCount} orders`
-      ])
+      ['Number of Unpaid Orders', reportData.detailedData.unpaidOrdersCount.toLocaleString()],
+      ['Avg Days Pending', Math.round(reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.daysPending, 0) / Math.max(reportData.detailedData.unpaidOrdersCount, 1)).toString()]
     ];
     const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Executive Summary');
 
-    // 2. ALL EXPENSES SHEET
+    // 2. PAID ORDERS SHEET
+    const paidOrders = reportData.detailedData.ordersList.filter(order => order.paymentStatus === 'paid');
+    const paidOrdersHeaders = [
+      'Order Number',
+      'Customer Name',
+      'Customer Phone',
+      'Customer Email',
+      'Total Amount (KES)',
+      'Pick & Drop (KES)',
+      'Discount (KES)',
+      'Net Amount (KES)',
+      'Services',
+      'Order Date',
+      'Payment Status'
+    ];
+    const paidOrdersData = [
+      ['PAID ORDERS REPORT'],
+      [`Total Paid Orders: ${paidOrders.length}`],
+      [`Total Paid Amount: ${formatCurrency(paidOrders.reduce((sum, order) => sum + order.totalAmount, 0))}`],
+      [''],
+      paidOrdersHeaders,
+      ...paidOrders.map(order => [
+        order.orderNumber,
+        order.customerName,
+        order.customerPhone,
+        order.customerEmail,
+        order.totalAmount,
+        order.pickDropAmount,
+        order.discount,
+        order.netAmount,
+        order.servicesNames,
+        order.formattedCreatedAt,
+        order.paymentStatus.toUpperCase()
+      ])
+    ];
+    const paidOrdersSheet = XLSX.utils.aoa_to_sheet(paidOrdersData);
+    XLSX.utils.book_append_sheet(workbook, paidOrdersSheet, 'Paid Orders');
+
+    // 3. UNPAID ORDERS SHEET
+    const unpaidHeaders = [
+      'Order Number',
+      'Customer Name', 
+      'Customer Phone',
+      'Customer Email',
+      'Total Amount (KES)',
+      'Amount Paid (KES)',
+      'Amount Due (KES)',
+      'Pick & Drop (KES)',
+      'Services',
+      'Days Pending',
+      'Priority',
+      'Order Date',
+      'Payment Status'
+    ];
+    const unpaidData = [
+      ['UNPAID ORDERS REPORT - IMMEDIATE ACTION REQUIRED'],
+      [`Total Unpaid Orders: ${reportData.detailedData.unpaidOrdersCount}`],
+      [`Total Amount Due: ${formatCurrency(reportData.detailedData.totalUnpaidAmount)}`],
+      [`Average Days Pending: ${Math.round(reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.daysPending, 0) / Math.max(reportData.detailedData.unpaidOrdersCount, 1))}`],
+      [''],
+      ['PRIORITY LEGEND: HIGH (>30 days) | MEDIUM (>14 days) | LOW (≤14 days)'],
+      [''],
+      unpaidHeaders,
+      ...reportData.detailedData.unpaidOrdersList.map(order => [
+        order.orderNumber,
+        order.customerName,
+        order.customerPhone,
+        order.customerEmail,
+        order.totalAmount,
+        order.amountPaid,
+        order.amountDue,
+        order.pickDropAmount,
+        order.servicesNames,
+        order.daysPending,
+        order.daysPending > 30 ? 'HIGH' : order.daysPending > 14 ? 'MEDIUM' : 'LOW',
+        order.formattedCreatedAt,
+        order.paymentStatus.toUpperCase()
+      ])
+    ];
+    const unpaidSheet = XLSX.utils.aoa_to_sheet(unpaidData);
+    XLSX.utils.book_append_sheet(workbook, unpaidSheet, 'Unpaid Orders');
+
+    // 4. ALL EXPENSES SHEET
     const expensesHeaders = [
       'Date',
       'Description', 
       'Category',
       'Amount (KES)',
-      'Amount (Formatted)',
-      'Created Date',
-      'ID'
+      'Created Date'
     ];
     const expensesData = [
+      ['BUSINESS EXPENSES REPORT'],
+      [`Total Expenses: ${formatCurrency(reportData.expenseReport.totalExpenses)}`],
+      [`Number of Expenses: ${reportData.detailedData.expensesList.length}`],
+      [`Average Expense: ${formatCurrency(reportData.expenseReport.totalExpenses / Math.max(reportData.detailedData.expensesList.length, 1))}`],
+      [''],
+      ['EXPENSE BREAKDOWN BY CATEGORY:'],
+      ...reportData.expenseReport.expensesByCategory.map(cat => [
+        `${cat.category}:`,
+        '',
+        '',
+        formatCurrency(cat.amount),
+        `${((cat.amount / reportData.expenseReport.totalExpenses) * 100).toFixed(1)}%`
+      ]),
+      [''],
       expensesHeaders,
       ...reportData.detailedData.expensesList.map(expense => [
         expense.formattedDate,
         expense.description,
         expense.category,
         expense.amount,
-        expense.formattedAmount,
-        expense.formattedCreatedAt,
-        expense.id.toString()
+        expense.formattedCreatedAt
       ])
     ];
-    // Add summary row at the top
-    expensesData.splice(1, 0, [
-      'TOTAL EXPENSES',
-      '',
-      `${reportData.detailedData.expensesList.length} items`,
-      reportData.expenseReport.totalExpenses,
-      formatCurrency(reportData.expenseReport.totalExpenses),
-      '',
-      ''
-    ]);
-    expensesData.splice(2, 0, ['']); // Empty row for separation
     const expensesSheet = XLSX.utils.aoa_to_sheet(expensesData);
     XLSX.utils.book_append_sheet(workbook, expensesSheet, 'All Expenses');
 
-    // 3. ALL INCOME/ORDERS SHEET
-    const incomeHeaders = [
-      'Order Number',
-      'Customer Name',
-      'Customer Email',
-      'Customer Phone',
-      'Status',
-      'Payment Status',
-      'Total Amount (KES)',
-      'Pick & Drop (KES)',
-      'Discount (KES)',
-      'Net Amount (KES)',
-      'Services',
-      'Services Count',
-      'Order Date',
-      'Updated Date',
-      'ID'
-    ];
-    const incomeData = [
-      incomeHeaders,
-      ...reportData.detailedData.ordersList.map(order => [
-        order.orderNumber,
-        order.customerName,
-        order.customerEmail,
-        order.customerPhone,
-        order.status,
-        order.paymentStatus,
-        order.totalAmount,
-        order.pickDropAmount,
-        order.discount,
-        order.netAmount,
-        order.servicesNames,
-        order.servicesCount,
-        order.formattedCreatedAt,
-        order.formattedUpdatedAt,
-        order.id.toString()
-      ])
-    ];
-    // Add summary row at the top
-    incomeData.splice(1, 0, [
-      'TOTAL INCOME',
-      `${reportData.customerReport.totalCustomers} customers`,
-      '',
-      '',
-      `${reportData.salesReport.totalOrders} orders`,
-      '',
-      reportData.salesReport.totalRevenue,
-      reportData.salesReport.totalPickDropAmount || 0,
-      reportData.salesReport.totalDiscounts || 0,
-      reportData.salesReport.totalRevenue - (reportData.salesReport.totalDiscounts || 0),
-      '',
-      '',
-      '',
-      '',
-      ''
-    ]);
-    incomeData.splice(2, 0, ['']); // Empty row for separation
-    const incomeSheet = XLSX.utils.aoa_to_sheet(incomeData);
-    XLSX.utils.book_append_sheet(workbook, incomeSheet, 'All Income');
-
-    // 4. UNPAID LAUNDRY SHEET
-    const unpaidHeaders = [
-      'Order Number',
-      'Customer Name', 
-      'Customer Email',
-      'Customer Phone',
-      'Status',
-      'Payment Status',
-      'Total Amount (KES)',
-      'Amount Paid (KES)',
-      'Amount Due (KES)',
-      'Pick & Drop (KES)',
-      'Discount (KES)',
-      'Services',
-      'Days Pending',
-      'Order Date',
-      'Last Updated',
-      'Priority',
-      'ID'
-    ];
-    const unpaidData = [
-      unpaidHeaders,
-      ...reportData.detailedData.unpaidOrdersList.map(order => [
-        order.orderNumber,
-        order.customerName,
-        order.customerEmail,
-        order.customerPhone,
-        order.status,
-        order.paymentStatus,
-        order.totalAmount,
-        order.amountPaid,
-        order.amountDue,
-        order.pickDropAmount,
-        order.discount,
-        order.servicesNames,
-        order.daysPending,
-        order.formattedCreatedAt,
-        order.formattedUpdatedAt,
-        order.daysPending > 30 ? 'HIGH' : order.daysPending > 14 ? 'MEDIUM' : 'LOW',
-        order.id.toString()
-      ])
-    ];
-    // Add summary row at the top
-    unpaidData.splice(1, 0, [
-      'TOTAL UNPAID',
-      `${reportData.detailedData.unpaidOrdersCount} orders`,
-      '',
-      '',
-      'UNPAID/PARTIAL',
-      '',
-      reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.totalAmount, 0),
-      reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.amountPaid, 0),
-      reportData.detailedData.totalUnpaidAmount,
-      reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.pickDropAmount, 0),
-      reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.discount, 0),
-      '',
-      Math.round(reportData.detailedData.unpaidOrdersList.reduce((sum, order) => sum + order.daysPending, 0) / Math.max(reportData.detailedData.unpaidOrdersCount, 1)),
-      '',
-      '',
-      '',
-      ''
-    ]);
-    unpaidData.splice(2, 0, ['']); // Empty row for separation
-    const unpaidSheet = XLSX.utils.aoa_to_sheet(unpaidData);
-    XLSX.utils.book_append_sheet(workbook, unpaidSheet, 'Unpaid Laundry');
-
-    // 5. ANALYTICS SHEET
+    // 5. BUSINESS ANALYTICS SHEET
     const analyticsData = [
-      ['ECONURU BUSINESS ANALYTICS'],
-      [`Period: Last ${dateRange} days`],
+      ['ECONURU BUSINESS ANALYTICS & INSIGHTS'],
+      [`Analysis Period: Last ${dateRange} days`],
+      [`Generated: ${new Date().toLocaleDateString('en-KE')}`],
       [''],
+      
+      // Revenue Analytics
       ['=== REVENUE ANALYTICS ==='],
-      ['Gross Revenue', formatCurrency(reportData.salesReport.grossRevenue || reportData.salesReport.totalRevenue)],
-      ['Total Discounts', formatCurrency(reportData.salesReport.totalDiscounts || 0)],
-      ['Pick & Drop Revenue', formatCurrency(reportData.salesReport.totalPickDropAmount || 0)],
-      ['Net Revenue', formatCurrency(reportData.salesReport.totalRevenue)],
+      ['Metric', 'Value', 'Details'],
+      ['Gross Revenue', reportData.salesReport.grossRevenue || reportData.salesReport.totalRevenue, formatCurrency(reportData.salesReport.grossRevenue || reportData.salesReport.totalRevenue)],
+      ['Total Discounts', reportData.salesReport.totalDiscounts || 0, formatCurrency(reportData.salesReport.totalDiscounts || 0)],
+      ['Pick & Drop Revenue', reportData.salesReport.totalPickDropAmount || 0, formatCurrency(reportData.salesReport.totalPickDropAmount || 0)],
+      ['Net Revenue', reportData.salesReport.totalRevenue, formatCurrency(reportData.salesReport.totalRevenue)],
+      ['Revenue per Order', reportData.salesReport.averageOrderValue, formatCurrency(reportData.salesReport.averageOrderValue)],
+      ['Revenue per Customer', reportData.customerReport.totalCustomers > 0 ? reportData.salesReport.totalRevenue / reportData.customerReport.totalCustomers : 0, formatCurrency(reportData.customerReport.totalCustomers > 0 ? reportData.salesReport.totalRevenue / reportData.customerReport.totalCustomers : 0)],
       [''],
-      ['=== MONTHLY REVENUE BREAKDOWN ==='],
-      ['Month', 'Revenue (KES)', 'Orders', 'Pick&Drop (KES)', 'Discounts (KES)'],
+      
+      // Monthly Performance
+      ['=== MONTHLY PERFORMANCE ==='],
+      ['Month', 'Revenue (KES)', 'Orders', 'Pick&Drop (KES)', 'Discounts (KES)', 'Net Revenue (KES)'],
       ...reportData.salesReport.revenueByMonth.map(month => [
         month.month,
         month.revenue,
         (month as any).orders || 0,
         (month as any).pickDrop || 0,
-        (month as any).discounts || 0
+        (month as any).discounts || 0,
+        month.revenue - ((month as any).discounts || 0)
       ]),
       [''],
-      ['=== ORDER STATUS BREAKDOWN ==='],
-      ['Status', 'Count', 'Revenue (KES)', 'Avg Order Value (KES)'],
+      
+      // Order Status Analysis
+      ['=== ORDER STATUS ANALYSIS ==='],
+      ['Status', 'Count', 'Revenue (KES)', 'Avg Order Value (KES)', 'Percentage (%)'],
       ...reportData.salesReport.ordersByStatus.map(status => [
-        status.status,
+        status.status.toUpperCase(),
         status.count,
         (status as any).revenue || 0,
-        (status as any).averageValue || 0
+        (status as any).averageValue || 0,
+        ((status.count / reportData.salesReport.totalOrders) * 100).toFixed(1) + '%'
       ]),
       [''],
-      ['=== EXPENSE BREAKDOWN ==='],
-      ['Category', 'Amount (KES)', 'Count', 'Average (KES)'],
-      ...reportData.expenseReport.expensesByCategory.map(expense => [
-        expense.category,
-        expense.amount,
-        (expense as any).count || 1,
-        (expense as any).averageAmount || expense.amount
+      
+      // Payment Status Analysis
+      ['=== PAYMENT STATUS ANALYSIS ==='],
+      ['Payment Status', 'Orders Count', 'Total Amount (KES)', 'Percentage by Amount (%)'],
+      ...reportData.paymentStatusAmountPie.map(payment => [
+        payment.status.toUpperCase(),
+        reportData.paymentStatusPie.find(p => p.status === payment.status)?.count || 0,
+        payment.amount,
+        ((payment.amount / reportData.salesReport.totalRevenue) * 100).toFixed(1) + '%'
       ]),
       [''],
-      ['=== TOP CUSTOMERS ==='],
-      ['Rank', 'Customer Name', 'Total Spent (KES)', 'Orders', 'Avg Order (KES)'],
+      
+      // Top Customers Analysis
+      ['=== TOP CUSTOMERS ANALYSIS ==='],
+      ['Rank', 'Customer Name', 'Total Spent (KES)', 'Orders', 'Avg Order (KES)', 'Customer Value Score'],
       ...reportData.customerReport.topCustomers.map((customer, index) => [
         index + 1,
         customer.name,
         customer.totalSpent,
         customer.orderCount,
-        customer.orderCount > 0 ? (customer.totalSpent / customer.orderCount).toFixed(2) : 0
+        customer.orderCount > 0 ? (customer.totalSpent / customer.orderCount).toFixed(2) : 0,
+        (customer.totalSpent * customer.orderCount / 1000).toFixed(1) // Simple scoring system
       ]),
       [''],
-      ['=== SERVICE PERFORMANCE ==='],
-      ['Service Name', 'Revenue (KES)', 'Orders', 'Percentage (%)'],
-      ...reportData.serviceReport.servicePerformance.map(service => [
+      
+      // Service Performance Analysis
+      ['=== SERVICE PERFORMANCE ANALYSIS ==='],
+      ['Rank', 'Service Name', 'Revenue (KES)', 'Orders', 'Market Share (%)', 'Avg Price (KES)'],
+      ...reportData.serviceReport.topServices.map((service, index) => [
+        index + 1,
         service.name,
         service.revenue,
-        (service as any).orderCount || 0,
-        service.percentage.toFixed(2)
-      ])
+        service.orderCount,
+        ((service.revenue / reportData.salesReport.totalRevenue) * 100).toFixed(1) + '%',
+        service.orderCount > 0 ? (service.revenue / service.orderCount).toFixed(2) : 0
+      ]),
+      [''],
+      
+      // Expense Analysis
+      ['=== EXPENSE ANALYSIS ==='],
+      ['Category', 'Amount (KES)', 'Count', 'Avg Amount (KES)', 'Share of Expenses (%)'],
+      ...reportData.expenseReport.expensesByCategory.map(expense => [
+        expense.category,
+        expense.amount,
+        (expense as any).count || 1,
+        (expense as any).averageAmount || expense.amount,
+        ((expense.amount / reportData.expenseReport.totalExpenses) * 100).toFixed(1) + '%'
+      ]),
+      [''],
+      
+      // Profitability Analysis
+      ['=== PROFITABILITY ANALYSIS ==='],
+      ['Metric', 'Amount (KES)', 'Percentage (%)'],
+      ['Total Revenue', reportData.salesReport.totalRevenue, '100.0%'],
+      ['Total Expenses', reportData.expenseReport.totalExpenses, ((reportData.expenseReport.totalExpenses / reportData.salesReport.totalRevenue) * 100).toFixed(1) + '%'],
+      ['Gross Profit', reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses, ((((reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses) / reportData.salesReport.totalRevenue) * 100) || 0).toFixed(1) + '%'],
+      ['Revenue per Employee', 'Calculate manually', 'Based on staff count'],
+      ['Break-even Point', 'Calculate manually', 'Based on fixed costs'],
+      [''],
+      
+      // Key Performance Indicators
+      ['=== KEY PERFORMANCE INDICATORS (KPIs) ==='],
+      ['KPI', 'Current Value', 'Target/Benchmark', 'Status'],
+      ['Customer Acquisition', reportData.customerReport.newCustomers, 'Set Target', 'Monitor'],
+      ['Customer Retention Rate', `${reportData.customerReport.customerRetentionRate || 0}%`, '80%+', reportData.customerReport.customerRetentionRate > 80 ? 'Good' : 'Needs Improvement'],
+      ['Average Order Value', formatCurrency(reportData.salesReport.averageOrderValue), 'Set Target', 'Monitor'],
+      ['Profit Margin', `${((reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses) / reportData.salesReport.totalRevenue * 100).toFixed(1)}%`, '20%+', ((reportData.salesReport.totalRevenue - reportData.expenseReport.totalExpenses) / reportData.salesReport.totalRevenue * 100) > 20 ? 'Good' : 'Needs Improvement'],
+      ['Collection Efficiency', `${(((reportData.salesReport.totalRevenue - reportData.detailedData.totalUnpaidAmount) / reportData.salesReport.totalRevenue) * 100).toFixed(1)}%`, '95%+', (((reportData.salesReport.totalRevenue - reportData.detailedData.totalUnpaidAmount) / reportData.salesReport.totalRevenue) * 100) > 95 ? 'Excellent' : 'Monitor Collections'],
+      [''],
+      
+      // Action Items
+      ['=== RECOMMENDED ACTIONS ==='],
+      ['Priority', 'Action Item', 'Expected Impact'],
+      ['HIGH', `Follow up on ${reportData.detailedData.unpaidOrdersCount} unpaid orders worth ${formatCurrency(reportData.detailedData.totalUnpaidAmount)}`, 'Improve cash flow'],
+      ['MEDIUM', 'Analyze top services performance for inventory planning', 'Optimize service offerings'],
+      ['MEDIUM', 'Review expense categories for cost optimization', 'Improve profit margins'],
+      ['LOW', 'Implement customer retention strategies', 'Increase repeat business'],
+      ['LOW', 'Set up automated payment reminders', 'Reduce unpaid orders']
     ];
     const analyticsSheet = XLSX.utils.aoa_to_sheet(analyticsData);
-    XLSX.utils.book_append_sheet(workbook, analyticsSheet, 'Analytics');
+    XLSX.utils.book_append_sheet(workbook, analyticsSheet, 'Business Analytics');
 
     // Write the file
     XLSX.writeFile(workbook, fileName);
 
     toast({
-      title: "Excel Report exported successfully",
-      description: `Comprehensive report with ${reportData.detailedData.expensesList.length} expenses, ${reportData.detailedData.ordersList.length} orders, and ${reportData.detailedData.unpaidOrdersCount} unpaid orders downloaded as ${fileName}`,
+      title: "Comprehensive Excel Report exported successfully",
+      description: `Complete business report with ${paidOrders.length} paid orders, ${reportData.detailedData.unpaidOrdersCount} unpaid orders, ${reportData.detailedData.expensesList.length} expenses, and detailed analytics downloaded as ${fileName}`,
     });
   };
 
