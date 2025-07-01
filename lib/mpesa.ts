@@ -5,6 +5,7 @@ export interface MpesaConfig {
   consumerSecret: string;
   passkey: string;
   shortCode: string;
+  tillNumber: string;
   environment: 'sandbox' | 'production';
 }
 
@@ -90,6 +91,7 @@ class MpesaService {
       consumerSecret: process.env.MPESA_CONSUMER_SECRET || '',
       passkey: process.env.MPESA_PASSKEY || '',
       shortCode: process.env.MPESA_SHORT_CODE || '',
+      tillNumber: process.env.MPESA_TILL_NUMBER || '',
       environment: (process.env.MPESA_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox'
     };
     
@@ -206,14 +208,15 @@ class MpesaService {
       const password = this.generatePassword(timestamp);
       const formattedPhone = this.formatPhoneNumber(request.phoneNumber);
 
+
       const payload = {
         BusinessShortCode: this.config.shortCode,
         Password: password,
         Timestamp: timestamp,
-        TransactionType: 'CustomerPayBillOnline',
+        TransactionType: 'CustomerBuyGoodsOnline',
         Amount: Math.round(request.amount),
         PartyA: formattedPhone,
-        PartyB: this.config.shortCode,
+        PartyB: this.config.tillNumber,
         PhoneNumber: formattedPhone,
         CallBackURL: request.callbackUrl,
         AccountReference: request.orderId,
