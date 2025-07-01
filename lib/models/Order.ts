@@ -21,7 +21,7 @@ export interface IOrder extends mongoose.Document {
   totalAmount: number;
   pickDropAmount: number;
   discount: number;
-  paymentStatus: 'unpaid' | 'paid' | 'partial';
+  paymentStatus: 'unpaid' | 'paid' | 'partial' | 'pending' | 'failed';
   laundryStatus: 'to-be-picked' | 'picked' | 'in-progress' | 'ready' | 'delivered';
   status: 'pending' | 'confirmed' | 'in-progress' | 'ready' | 'delivered' | 'cancelled';
   promoCode?: string;
@@ -35,6 +35,28 @@ export interface IOrder extends mongoose.Document {
     maxDiscount: number;
     appliedAt: Date;
     lockedIn: boolean;
+  };
+  // M-Pesa payment fields (top level)
+  checkoutRequestId?: string;
+  mpesaReceiptNumber?: string;
+  transactionDate?: Date;
+  phoneNumber?: string;
+  amountPaid?: number;
+  resultCode?: number;
+  resultDescription?: string;
+  paymentInitiatedAt?: Date;
+  paymentCompletedAt?: Date;
+  // M-Pesa payment fields (nested - for backward compatibility)
+  mpesaPayment?: {
+    checkoutRequestId?: string;
+    mpesaReceiptNumber?: string;
+    transactionDate?: Date;
+    phoneNumber?: string;
+    amountPaid?: number;
+    resultCode?: number;
+    resultDescription?: string;
+    paymentInitiatedAt?: Date;
+    paymentCompletedAt?: Date;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -117,7 +139,7 @@ const orderSchema = new mongoose.Schema<IOrder>({
   },
   paymentStatus: {
     type: String,
-    enum: ['unpaid', 'paid', 'partial'],
+    enum: ['unpaid', 'paid', 'partial', 'pending', 'failed'],
     required: true,
   },
   laundryStatus: {
@@ -156,6 +178,28 @@ const orderSchema = new mongoose.Schema<IOrder>({
       type: Boolean,
       default: false
     }
+  },
+  // M-Pesa payment fields (top level)
+  checkoutRequestId: String,
+  mpesaReceiptNumber: String,
+  transactionDate: Date,
+  phoneNumber: String,
+  amountPaid: Number,
+  resultCode: Number,
+  resultDescription: String,
+  paymentInitiatedAt: Date,
+  paymentCompletedAt: Date,
+  // M-Pesa payment fields (nested - for backward compatibility)
+  mpesaPayment: {
+    checkoutRequestId: String,
+    mpesaReceiptNumber: String,
+    transactionDate: Date,
+    phoneNumber: String,
+    amountPaid: Number,
+    resultCode: Number,
+    resultDescription: String,
+    paymentInitiatedAt: Date,
+    paymentCompletedAt: Date,
   },
 }, {
   timestamps: true,

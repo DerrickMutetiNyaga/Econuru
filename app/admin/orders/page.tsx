@@ -66,13 +66,24 @@ interface Order {
   totalAmount: number;
   pickDropAmount?: number;
   discount?: number;
-  paymentStatus?: 'unpaid' | 'paid' | 'partial';
+  paymentStatus?: 'unpaid' | 'paid' | 'partial' | 'pending' | 'failed';
   laundryStatus?: 'to-be-picked' | 'picked' | 'in-progress' | 'ready' | 'delivered';
   status: 'pending' | 'confirmed' | 'in-progress' | 'ready' | 'delivered' | 'cancelled';
   createdAt: string;
   updatedAt: string;
   promoCode?: string;
   promoDiscount?: number;
+  mpesaPayment?: {
+    checkoutRequestId?: string;
+    mpesaReceiptNumber?: string;
+    transactionDate?: Date;
+    phoneNumber?: string;
+    amountPaid?: number;
+    resultCode?: number;
+    resultDescription?: string;
+    paymentInitiatedAt?: Date;
+    paymentCompletedAt?: Date;
+  };
 }
 
 const statusColors = {
@@ -114,6 +125,13 @@ export default function OrdersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [ordersPerPage] = useState(9);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  // M-Pesa payment states
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [orderForPayment, setOrderForPayment] = useState<Order | null>(null);
+  const [paymentPhone, setPaymentPhone] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [initiatingPayment, setInitiatingPayment] = useState(false);
+  const [checkingPayment, setCheckingPayment] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -341,6 +359,208 @@ export default function OrdersPage() {
   const handleDeleteOrder = async (order: Order) => {
     setOrderToDelete(order);
     setDeleteDialogOpen(true);
+  };
+
+  // M-Pesa Payment Functions
+  const handleInitiatePayment = (order: Order) => {
+    setOrderForPayment(order);
+    setPaymentPhone(order.customer.phone);
+    setPaymentAmount(order.totalAmount);
+    setPaymentDialogOpen(true);
+  };
+
+  const initiateSTKPush = async () => {
+    if (!orderForPayment || !paymentPhone || !paymentAmount) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please fill in all payment details',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setInitiatingPayment(true);
+
+      const response = await fetch('/api/mpesa/initiate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          orderId: orderForPayment._id,
+          phoneNumber: paymentPhone,
+          amount: paymentAmount,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: 'Payment Initiated',
+          description: data.customerMessage || 'STK push sent to customer',
+          variant: 'default',
+        });
+
+        // Update order status in local state
+        setOrders(prevOrders =>
+          prevOrders.map(order =>
+            order._id === orderForPayment._id
+              ? { ...order, paymentStatus: 'pending' as const }
+              : order
+          )
+        );
+
+        setPaymentDialogOpen(false);
+        setOrderForPayment(null);
+        setPaymentPhone('');
+        setPaymentAmount(0);
+
+        // Start polling for payment status
+        pollPaymentStatus(data.checkoutRequestId);
+      } else {
+        toast({
+          title: 'Payment Failed',
+          description: data.error || 'Failed to initiate payment',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error initiating payment:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to initiate payment',
+        variant: 'destructive',
+      });
+    } finally {
+      setInitiatingPayment(false);
+    }
+  };
+
+  const pollPaymentStatus = async (checkoutRequestId: string) => {
+    let attempts = 0;
+    const maxAttempts = 30; // Poll for 5 minutes (30 * 10 seconds)
+
+    const poll = async () => {
+      try {
+        setCheckingPayment(true);
+        const response = await fetch(`/api/mpesa/status/${checkoutRequestId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+        
+        if (data.success && data.order) {
+          const updatedOrder = data.order;
+          
+          // Update order in local state
+          setOrders(prevOrders =>
+            prevOrders.map(order =>
+              order._id === updatedOrder._id
+                ? { ...order, paymentStatus: updatedOrder.paymentStatus, mpesaPayment: updatedOrder.mpesaPayment }
+                : order
+            )
+          );
+
+          // Check if payment is completed (success or failure)
+          if (updatedOrder.paymentStatus === 'paid' || updatedOrder.paymentStatus === 'failed') {
+            setCheckingPayment(false);
+            
+            toast({
+              title: updatedOrder.paymentStatus === 'paid' ? 'Payment Successful' : 'Payment Failed',
+              description: updatedOrder.paymentStatus === 'paid' 
+                ? `Payment completed. Receipt: ${updatedOrder.mpesaPayment?.mpesaReceiptNumber || 'N/A'}`
+                : `Payment failed: ${updatedOrder.mpesaPayment?.resultDescription || 'Unknown error'}`,
+              variant: updatedOrder.paymentStatus === 'paid' ? 'default' : 'destructive',
+            });
+            
+            return; // Stop polling
+          }
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 10000); // Poll every 10 seconds
+        } else {
+          setCheckingPayment(false);
+          toast({
+            title: 'Payment Status Unknown',
+            description: 'Payment status check timed out. Please check manually.',
+            variant: 'destructive',
+          });
+        }
+      } catch (error) {
+        console.error('Error checking payment status:', error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 10000);
+        } else {
+          setCheckingPayment(false);
+        }
+      }
+    };
+
+    poll();
+  };
+
+  const checkPaymentStatus = async (order: Order) => {
+    if (!order.mpesaPayment?.checkoutRequestId) {
+      toast({
+        title: 'No Payment Request',
+        description: 'No M-Pesa payment request found for this order',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setCheckingPayment(true);
+      const response = await fetch(`/api/mpesa/status/${order.mpesaPayment.checkoutRequestId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      
+      if (data.success && data.order) {
+        const updatedOrder = data.order;
+        
+        // Update order in local state
+        setOrders(prevOrders =>
+          prevOrders.map(o =>
+            o._id === updatedOrder._id
+              ? { ...o, paymentStatus: updatedOrder.paymentStatus, mpesaPayment: updatedOrder.mpesaPayment }
+              : o
+          )
+        );
+
+        toast({
+          title: 'Payment Status Updated',
+          description: `Payment status: ${updatedOrder.paymentStatus}`,
+          variant: 'default',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to check payment status',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to check payment status',
+        variant: 'destructive',
+      });
+    } finally {
+      setCheckingPayment(false);
+    }
   };
 
   const confirmDeleteOrder = async () => {
@@ -931,7 +1151,11 @@ export default function OrdersPage() {
                           ? 'bg-green-100 text-green-800 border-green-200' 
                           : (order.paymentStatus || 'unpaid') === 'partial'
                           ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                          : 'bg-red-100 text-red-800 border-red-200'
+                          : (order.paymentStatus || 'unpaid') === 'pending'
+                          ? 'bg-blue-100 text-blue-800 border-blue-200'
+                          : (order.paymentStatus || 'unpaid') === 'failed'
+                          ? 'bg-red-100 text-red-800 border-red-200'
+                          : 'bg-gray-100 text-gray-800 border-gray-200'
                       }`}>
                         {(order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
                       </Badge>
@@ -1073,7 +1297,11 @@ export default function OrdersPage() {
                               ? 'bg-green-100 text-green-800 border-green-200' 
                               : (order.paymentStatus || 'unpaid') === 'partial'
                               ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                              : 'bg-red-100 text-red-800 border-red-200'
+                              : (order.paymentStatus || 'unpaid') === 'pending'
+                              ? 'bg-blue-100 text-blue-800 border-blue-200'
+                              : (order.paymentStatus || 'unpaid') === 'failed'
+                              ? 'bg-red-100 text-red-800 border-red-200'
+                              : 'bg-gray-100 text-gray-800 border-gray-200'
                           }`}>
                             {(order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
                           </Badge>
@@ -1182,6 +1410,46 @@ export default function OrdersPage() {
                         <Trash2 className="w-4 h-4" />
                         Delete
                       </Button>
+                    </div>
+
+                    {/* Payment Actions */}
+                    <div className="flex gap-2 pt-2">
+                      {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed') && (
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleInitiatePayment(order);
+                          }}
+                          disabled={initiatingPayment}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          {initiatingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
+                          Request Payment
+                        </Button>
+                      )}
+                      {order.paymentStatus === 'pending' && order.mpesaPayment?.checkoutRequestId && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            checkPaymentStatus(order);
+                          }}
+                          disabled={checkingPayment}
+                          className="flex-1 border-orange-600 text-orange-600 hover:bg-orange-600 hover:text-white"
+                        >
+                          {checkingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                          Check Status
+                        </Button>
+                      )}
+                      {order.paymentStatus === 'paid' && order.mpesaPayment?.mpesaReceiptNumber && (
+                        <div className="flex-1 bg-green-50 border border-green-200 rounded-md p-2">
+                          <p className="text-xs text-green-800 font-medium">
+                            Receipt: {order.mpesaPayment.mpesaReceiptNumber}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -1292,6 +1560,36 @@ export default function OrdersPage() {
                             Accept
                           </Button>
                         )}
+                        
+                        {/* Payment Actions */}
+                        {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed') && (
+                          <Button
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleInitiatePayment(order);
+                            }}
+                            disabled={initiatingPayment}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            {initiatingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
+                          </Button>
+                        )}
+                        {order.paymentStatus === 'pending' && order.mpesaPayment?.checkoutRequestId && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              checkPaymentStatus(order);
+                            }}
+                            disabled={checkingPayment}
+                            className="border-orange-600 text-orange-600 hover:bg-orange-600 hover:text-white"
+                          >
+                            {checkingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                          </Button>
+                        )}
+                        
                         <Button
                           size="sm"
                           variant="outline"
@@ -1723,6 +2021,125 @@ export default function OrdersPage() {
                 <>
                   <Trash2 className="w-4 h-4" />
                   Delete Order
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* M-Pesa Payment Dialog */}
+      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-blue-600" />
+              Initiate M-Pesa Payment
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Send STK push request to customer for payment
+            </DialogDescription>
+          </DialogHeader>
+
+          {orderForPayment && (
+            <div className="space-y-4">
+              {/* Order Details */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Order:</span>
+                    <span className="text-sm font-bold text-gray-900">{orderForPayment.orderNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Customer:</span>
+                    <span className="text-sm font-bold text-gray-900">{orderForPayment.customer.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Original Amount:</span>
+                    <span className="text-sm font-bold text-gray-900">Ksh {orderForPayment.totalAmount.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Form */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone Number
+                  </label>
+                  <Input
+                    type="tel"
+                    value={paymentPhone}
+                    onChange={(e) => setPaymentPhone(e.target.value)}
+                    placeholder="254712345678"
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter phone number in format: 254712345678
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Payment Amount (Ksh)
+                  </label>
+                  <Input
+                    type="number"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                    min="1"
+                    max={orderForPayment.totalAmount}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Maximum: Ksh {orderForPayment.totalAmount.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Payment Status */}
+              {orderForPayment.mpesaPayment?.checkoutRequestId && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Previous Request ID:</strong> {orderForPayment.mpesaPayment.checkoutRequestId}
+                  </p>
+                  {orderForPayment.mpesaPayment.resultDescription && (
+                    <p className="text-sm text-yellow-800 mt-1">
+                      <strong>Status:</strong> {orderForPayment.mpesaPayment.resultDescription}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setPaymentDialogOpen(false);
+                setOrderForPayment(null);
+                setPaymentPhone('');
+                setPaymentAmount(0);
+              }}
+              disabled={initiatingPayment}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={initiateSTKPush}
+              disabled={initiatingPayment || !paymentPhone || !paymentAmount}
+              className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+            >
+              {initiatingPayment ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Sending STK...
+                </>
+              ) : (
+                <>
+                  <DollarSign className="w-4 h-4" />
+                  Send STK Push
                 </>
               )}
             </Button>

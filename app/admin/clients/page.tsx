@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
+import * as XLSX from 'xlsx'
 import {
   Search,
   Filter,
@@ -23,6 +24,9 @@ import {
   ChevronDown,
   X,
   Check,
+  Upload,
+  FileText,
+  AlertCircle,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -74,6 +78,15 @@ export default function ClientsPage() {
   const [messageSentCount, setMessageSentCount] = useState(0)
   const [messageFailedCount, setMessageFailedCount] = useState(0)
   const [sendingComplete, setSendingComplete] = useState(false)
+  
+  // CSV Upload state
+  const [showCsvDialog, setShowCsvDialog] = useState(false)
+  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [csvData, setCsvData] = useState<any[]>([])
+  const [csvPreview, setCsvPreview] = useState<any[]>([])
+  const [uploadingCsv, setUploadingCsv] = useState(false)
+  const [csvResults, setCsvResults] = useState<any>(null)
+  const csvInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function fetchClients() {
@@ -582,6 +595,110 @@ export default function ClientsPage() {
     })
   }
 
+  // CSV Upload functions
+  function handleCsvFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setCsvFile(file)
+    
+    // Read and parse the CSV file
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const data = new Uint8Array(e.target?.result as ArrayBuffer)
+      const workbook = XLSX.read(data, { type: 'array' })
+      const sheetName = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+      
+      if (jsonData.length > 0) {
+        const headers = jsonData[0] as string[]
+        const rows = jsonData.slice(1) as any[][]
+        
+        console.log('CSV Headers:', headers)
+        console.log('First few rows:', rows.slice(0, 3))
+        
+        // Map CSV columns to our expected format
+        const mappedData = rows.map((row, index) => {
+          const rowData: any = {}
+          headers.forEach((header, headerIndex) => {
+            rowData[header] = row[headerIndex] || ''
+          })
+          
+          // Map CSV fields to Customer model (ignore CSV ID - we use our own database IDs)
+          const mappedItem = {
+            name: rowData.ClientName || rowData['Client Name'] || rowData.clientname || '',
+            phone: rowData.ClientNo || rowData['Client No'] || rowData.clientno || rowData.Phone || rowData.phone || '',
+            email: rowData.Email || rowData.email || '',
+            address: rowData.ClientLocation || rowData['Client Location'] || rowData.clientlocation || rowData.Address || rowData.address || '',
+            originalData: rowData,
+            rowNumber: index + 2, // +2 because we removed header and arrays are 0-indexed
+            // Note: CSV ID is ignored - system will generate unique database IDs
+          }
+          
+          console.log(`Row ${index + 1}:`, mappedItem)
+          return mappedItem
+        }).filter(item => item.name && item.phone) // Only include rows with required fields
+        
+        console.log('Mapped data count:', mappedData.length)
+        console.log('Valid records:', mappedData)
+        
+        setCsvData(mappedData)
+        setCsvPreview(mappedData.slice(0, 20)) // Show first 20 rows as preview
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  function resetCsvUpload() {
+    setCsvFile(null)
+    setCsvData([])
+    setCsvPreview([])
+    setCsvResults(null)
+    if (csvInputRef.current) {
+      csvInputRef.current.value = ''
+    }
+  }
+
+  async function handleCsvUpload() {
+    if (!csvData.length) return
+
+    setUploadingCsv(true)
+    setCsvResults(null)
+
+    try {
+      const response = await fetch('/api/customers/bulk-import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        },
+        body: JSON.stringify({ customers: csvData }),
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        setCsvResults(result.results)
+        
+        // Don't refresh immediately - let user see the results first
+        console.log('Import Results:', result.results)
+        
+        // Show detailed results for a few seconds before refreshing
+        setTimeout(() => {
+          // Refresh the clients list
+          window.location.reload()
+        }, 10000) // 10 seconds to review results
+      } else {
+        setError(result.message || 'Failed to upload CSV')
+      }
+    } catch (error) {
+      setError('Failed to upload CSV. Please try again.')
+    } finally {
+      setUploadingCsv(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -594,6 +711,10 @@ export default function ClientsPage() {
           <Button variant="outline" className="rounded-xl" onClick={exportClientsToCSV}>
             <Download className="mr-2 w-4 h-4" />
             <a ref={fileDownloadRef} download="clients.csv" className="outline-none text-inherit no-underline">Export</a>
+          </Button>
+          <Button variant="outline" className="rounded-xl" onClick={() => setShowCsvDialog(true)}>
+            <Upload className="mr-2 w-4 h-4" />
+            Import CSV
           </Button>
           <Button variant="outline" className="rounded-xl" onClick={syncCustomers} disabled={syncing}>
             <RefreshCw className={`mr-2 w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
@@ -1390,6 +1511,275 @@ export default function ClientsPage() {
               >
                 <Check className="w-4 h-4 mr-2" />
                 Close
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Upload Dialog */}
+      <Dialog open={showCsvDialog} onOpenChange={setShowCsvDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Import Clients from CSV
+            </DialogTitle>
+            <DialogDescription>
+              Upload a CSV file with your client data. System will generate unique IDs - CSV ID column is ignored. Existing customers (by phone/email) will be skipped automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 overflow-y-auto flex-1 pr-2">
+            {/* File Upload Section */}
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleCsvFileSelect}
+                  className="hidden"
+                />
+                {!csvFile ? (
+                  <div className="space-y-2">
+                    <FileText className="w-12 h-12 text-gray-400 mx-auto" />
+                    <div>
+                      <Button
+                        variant="outline"
+                        onClick={() => csvInputRef.current?.click()}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Select CSV File
+                      </Button>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Supports CSV, Excel (.xlsx, .xls) files
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Check className="w-12 h-12 text-green-500 mx-auto" />
+                    <div className="font-medium">{csvFile.name}</div>
+                    <div className="text-lg font-bold text-green-600">
+                      {csvData.length} valid records found
+                    </div>
+                    {csvData.length > 100 && (
+                      <div className="text-sm text-blue-600 font-medium">
+                        Large dataset detected - scroll down to import button
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={resetCsvUpload}
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Remove File
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* CSV Field Mapping Info */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-blue-800">CSV Format & Import Rules</h4>
+                    <div className="text-sm text-blue-700">
+                      <p><strong>Required columns:</strong> ClientName, ClientNo (used as phone number)</p>
+                      <p><strong>Optional columns:</strong> Email, ClientLocation (used as address)</p>
+                      <p><strong>Alternative names:</strong> "Client Name", "Client No", "Client Location" are also accepted</p>
+                      <p><strong>ID Handling:</strong> CSV ID column is ignored - system generates unique database IDs</p>
+                      <p><strong>Duplicate Prevention:</strong> Existing customers (same phone/email) are automatically skipped</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Debug Section */}
+            {csvFile && csvData.length === 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h4 className="font-medium text-yellow-800 mb-2">Debugging CSV Upload</h4>
+                <p className="text-sm text-yellow-700 mb-2">
+                  File uploaded but no valid records found. Please check the browser console for details
+                  or ensure your CSV has the correct column names.
+                </p>
+                <div className="text-xs text-yellow-600">
+                  Expected columns: ClientName, ClientNo (or "Client Name", "Client No")
+                </div>
+              </div>
+            )}
+
+            {/* Preview Section */}
+            {csvPreview.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium">Preview ({csvPreview.length} of {csvData.length} records)</h4>
+                  <div className="text-sm text-gray-500">
+                    Total: {csvData.length} records ready to import
+                  </div>
+                </div>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="max-h-60 overflow-y-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-white z-10">
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Address</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {csvData.slice(0, 20).map((item, index) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{item.name}</TableCell>
+                            <TableCell>{item.phone}</TableCell>
+                            <TableCell>{item.email || '-'}</TableCell>
+                            <TableCell>{item.address || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                        {csvData.length > 20 && (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-gray-500 py-4">
+                              ... and {csvData.length - 20} more records
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Upload Progress */}
+            {uploadingCsv && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span className="text-sm">Importing customers...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Results Section */}
+            {csvResults && (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-medium text-blue-800 mb-3">📊 Import Summary</h4>
+                  <div className="text-sm text-blue-700">
+                    <div className="mb-2">
+                      <strong>CSV File:</strong> {csvFile?.name} ({csvResults.total} records processed)
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>✅ <strong>{csvResults.imported}</strong> new customers added</div>
+                      <div>⚠️ <strong>{csvResults.skipped}</strong> duplicates skipped</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                    <div className="text-3xl font-bold text-green-600">{csvResults.imported}</div>
+                    <div className="text-sm text-green-700 font-medium">New Customers</div>
+                    <div className="text-xs text-green-600">Successfully Added</div>
+                  </div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                    <div className="text-3xl font-bold text-yellow-600">{csvResults.skipped}</div>
+                    <div className="text-sm text-yellow-700 font-medium">Duplicates</div>
+                    <div className="text-xs text-yellow-600">Already in Database</div>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+                    <div className="text-3xl font-bold text-gray-600">{csvResults.total}</div>
+                    <div className="text-sm text-gray-700 font-medium">Total Processed</div>
+                    <div className="text-xs text-gray-600">From CSV File</div>
+                  </div>
+                </div>
+
+                {(csvResults.imported + csvResults.skipped) !== csvResults.total && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <h5 className="font-medium text-red-600 mb-2">⚠️ Discrepancy Detected</h5>
+                    <div className="text-sm text-red-700">
+                      Expected: {csvResults.total} | Processed: {csvResults.imported + csvResults.skipped}
+                      <br />Some records may have had validation errors.
+                    </div>
+                  </div>
+                )}
+
+                {csvResults.errors.length > 0 && (
+                  <div className="space-y-2">
+                    <h5 className="font-medium text-red-600">🚫 Issues Found ({csvResults.errors.length})</h5>
+                    <div className="max-h-40 overflow-y-auto bg-red-50 border border-red-200 rounded-lg p-3">
+                      {csvResults.errors.map((error: any, index: number) => (
+                        <div key={index} className="text-sm text-red-700 mb-2 border-b border-red-200 pb-1">
+                          <div className="font-medium">Row {error.row}:</div>
+                          <div className="text-xs">{error.error}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="text-sm text-green-700">
+                    <strong>✅ Import completed!</strong> Page will refresh in 10 seconds to show updated client list.
+                    <br />
+                    <span className="text-xs">Your total client count should now be: Previous count + {csvResults.imported} new customers</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 flex-shrink-0 pt-4 border-t border-gray-200 bg-white">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCsvDialog(false)
+                resetCsvUpload()
+                setError('')
+              }}
+              disabled={uploadingCsv}
+            >
+              Cancel
+            </Button>
+            {csvFile && csvData.length > 0 && !csvResults && (
+              <Button
+                onClick={handleCsvUpload}
+                disabled={uploadingCsv}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {uploadingCsv ? 'Importing...' : `Import ${csvData.length} Customers`}
+              </Button>
+            )}
+            {csvFile && csvData.length === 0 && !uploadingCsv && (
+              <div className="text-red-500 text-sm">
+                No valid records found. Please check your CSV format.
+              </div>
+            )}
+            {csvResults && (
+              <Button
+                onClick={() => {
+                  setShowCsvDialog(false)
+                  resetCsvUpload()
+                  setError('')
+                }}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Done
               </Button>
             )}
           </div>

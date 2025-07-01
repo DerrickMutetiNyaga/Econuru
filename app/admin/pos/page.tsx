@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -34,6 +34,8 @@ import {
   Plus as PlusIcon,
   Package,
   MessageSquare,
+  UserPlus,
+  UserCheck,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,6 +174,154 @@ export default function POSPage() {
   const [promoValid, setPromoValid] = useState(null);
   const [promoMessage, setPromoMessage] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
+
+  // Customer search state
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [isExistingCustomer, setIsExistingCustomer] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const searchTimeoutRef = useRef(null);
+  const suggestionDropdownRef = useRef(null);
+
+  // Customer search functions
+  const searchCustomers = useCallback(async (query) => {
+    if (!query.trim() || query.length < 2) {
+      setCustomerSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const response = await fetch(`/api/customers?search=${encodeURIComponent(query)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        const suggestions = data.customers.slice(0, 8); // Limit to 8 suggestions
+        setCustomerSuggestions(suggestions);
+        setShowSuggestions(suggestions.length > 0);
+      }
+    } catch (error) {
+      console.error('Error searching customers:', error);
+      setCustomerSuggestions([]);
+      setShowSuggestions(false);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [token]);
+
+  const handleCustomerSearchChange = (value) => {
+    setCustomerSearch(value);
+    setCustomerInfo(prev => ({ ...prev, name: value }));
+    
+    // Clear existing customer selection if user is typing
+    if (isExistingCustomer) {
+      setIsExistingCustomer(false);
+      setSelectedCustomerId(null);
+      setCustomerInfo(prev => ({ 
+        ...prev, 
+        phone: '', 
+        email: '', 
+        address: '' 
+      }));
+    }
+
+    // Debounce the search
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      searchCustomers(value);
+    }, 300);
+  };
+
+  const selectCustomer = (customer) => {
+    setCustomerSearch(customer.name);
+    setCustomerInfo({
+      ...customerInfo,
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email || '',
+      address: customer.address || '',
+    });
+    setIsExistingCustomer(true);
+    setSelectedCustomerId(customer._id);
+    setShowSuggestions(false);
+    setCustomerSuggestions([]);
+  };
+
+  const handlePhoneChange = async (phone) => {
+    setCustomerInfo(prev => ({ ...prev, phone }));
+    
+    // If user is typing a phone number, search for existing customer
+    if (phone.length >= 8) { // Search when phone has at least 8 digits
+      try {
+        const response = await fetch(`/api/customers?phone=${encodeURIComponent(phone)}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const data = await response.json();
+
+        if (data.success && data.customers.length > 0) {
+          const customer = data.customers[0];
+          // Only auto-fill if name field is empty or matches
+          if (!customerInfo.name || customerInfo.name === customer.name) {
+            setCustomerInfo({
+              ...customerInfo,
+              name: customer.name,
+              phone: customer.phone,
+              email: customer.email || '',
+              address: customer.address || '',
+            });
+            setCustomerSearch(customer.name);
+            setIsExistingCustomer(true);
+            setSelectedCustomerId(customer._id);
+          }
+        }
+      } catch (error) {
+        console.error('Error searching by phone:', error);
+      }
+    }
+  };
+
+  const clearCustomerSearch = () => {
+    setCustomerSearch("");
+    setCustomerSuggestions([]);
+    setShowSuggestions(false);
+    setIsExistingCustomer(false);
+    setSelectedCustomerId(null);
+    setCustomerInfo({
+      ...customerInfo,
+      name: '',
+      phone: '',
+      email: '',
+      address: '',
+    });
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (suggestionDropdownRef.current && !suggestionDropdownRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Fetch services and categories
   useEffect(() => {
@@ -366,6 +516,13 @@ export default function POSPage() {
     setLockedPromotion(null);
     setPromoValid(null);
     setPromoMessage("");
+    
+    // Clear customer search data
+    setCustomerSearch("");
+    setCustomerSuggestions([]);
+    setShowSuggestions(false);
+    setIsExistingCustomer(false);
+    setSelectedCustomerId(null);
   };
 
   // SMS Functions
@@ -1134,25 +1291,124 @@ Need help? Call us at +254 757 883 799`;
               <CardTitle className="text-lg mb-4 flex items-center gap-2">
                 <User className="w-5 h-5" />
                 Customer Information
+                {isExistingCustomer && (
+                  <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+                    <UserCheck className="w-3 h-3 mr-1" />
+                    Existing Customer
+                  </Badge>
+                )}
+                {!isExistingCustomer && customerInfo.name && (
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                    <UserPlus className="w-3 h-3 mr-1" />
+                    New Customer
+                  </Badge>
+                )}
               </CardTitle>
               <div className="space-y-3">
-                <div>
-                  <Label htmlFor="name">Name *</Label>
-                  <Input
-                    id="name"
-                    value={customerInfo.name}
-                    onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Customer name"
-                  />
+                {/* Customer Name Search */}
+                <div className="relative" ref={suggestionDropdownRef}>
+                  <Label htmlFor="name">Customer Name *</Label>
+                  <div className="relative">
+                    <Input
+                      id="name"
+                      value={customerSearch}
+                      onChange={(e) => handleCustomerSearchChange(e.target.value)}
+                      placeholder="Start typing customer name..."
+                      className={`${isExistingCustomer ? 'border-green-500 bg-green-50' : ''}`}
+                    />
+                    {searchLoading && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                      </div>
+                    )}
+                    {isExistingCustomer && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <UserCheck className="h-4 w-4 text-green-600" />
+                      </div>
+                    )}
+                    {customerInfo.name && !isExistingCustomer && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={clearCustomerSearch}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 hover:bg-gray-100"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Customer Suggestions Dropdown */}
+                  {showSuggestions && customerSuggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                      {customerSuggestions.map((customer) => (
+                        <div
+                          key={customer._id}
+                          onClick={() => selectCustomer(customer)}
+                          className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900">{customer.name}</div>
+                              <div className="text-sm text-gray-600 flex items-center gap-3">
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />
+                                  {customer.phone}
+                                </span>
+                                {customer.email && (
+                                  <span className="flex items-center gap-1">
+                                    <Mail className="w-3 h-3" />
+                                    {customer.email}
+                                  </span>
+                                )}
+                              </div>
+                              {customer.address && (
+                                <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                                  <MapPinIcon className="w-3 h-3" />
+                                  {customer.address}
+                                </div>
+                              )}
+                            </div>
+                            <UserCheck className="w-4 h-4 text-green-600" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* No results message */}
+                  {showSuggestions && customerSuggestions.length === 0 && !searchLoading && customerSearch.length >= 2 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+                      <div className="text-center text-gray-500">
+                        <UserPlus className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                        <div className="text-sm">No existing customers found</div>
+                        <div className="text-xs text-gray-400">Will create new customer</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Phone Number */}
                 <div>
-                  <Label htmlFor="phone">Phone *</Label>
-                  <Input
-                    id="phone"
-                    value={customerInfo.phone}
-                    onChange={(e) => setCustomerInfo(prev => ({ ...prev, phone: e.target.value }))}
-                    placeholder="Phone number"
-                  />
+                  <Label htmlFor="phone">Phone Number *</Label>
+                  <div className="relative">
+                    <Input
+                      id="phone"
+                      value={customerInfo.phone}
+                      onChange={(e) => handlePhoneChange(e.target.value)}
+                      placeholder="Phone number"
+                      className={`${isExistingCustomer ? 'border-green-500 bg-green-50' : ''}`}
+                    />
+                    {isExistingCustomer && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <UserCheck className="h-4 w-4 text-green-600" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Phone numbers are used to identify existing customers
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="email">Email (Optional)</Label>

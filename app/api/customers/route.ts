@@ -3,10 +3,33 @@ import dbConnect from '@/lib/mongodb';
 import Customer from '@/lib/models/Customer';
 import { requireAdmin } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await dbConnect();
-    const customers = await Customer.find().sort({ createdAt: -1 });
+    
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search');
+    const phone = searchParams.get('phone');
+    
+    let query = {};
+    
+    if (search) {
+      // Search by name or phone number
+      query = {
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } }
+        ]
+      };
+    } else if (phone) {
+      // Search by exact phone number
+      query = { phone: phone };
+    }
+    
+    const customers = await Customer.find(query)
+      .sort({ createdAt: -1 })
+      .limit(search ? 20 : 0); // Limit search results, but not regular fetch
+      
     return NextResponse.json({ success: true, customers });
   } catch (error) {
     console.error('Error fetching customers:', error);
