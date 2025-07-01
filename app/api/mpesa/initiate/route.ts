@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       // Update order with M-Pesa details
       await Order.findByIdAndUpdate(orderId, {
         paymentStatus: 'pending',
+        paymentMethod: 'mpesa_stk',
         checkoutRequestId: result.checkoutRequestId,
         phoneNumber: phoneNumber,
         paymentInitiatedAt: new Date()

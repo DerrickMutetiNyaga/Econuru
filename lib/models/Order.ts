@@ -58,6 +58,21 @@ export interface IOrder extends mongoose.Document {
     paymentInitiatedAt?: Date;
     paymentCompletedAt?: Date;
   };
+  // C2B payment fields
+  c2bPayment?: {
+    transactionId?: string;
+    mpesaReceiptNumber?: string;
+    transactionDate?: Date;
+    phoneNumber?: string;
+    amountPaid?: number;
+    transactionType?: string;
+    billRefNumber?: string;
+    thirdPartyTransID?: string;
+    orgAccountBalance?: string;
+    customerName?: string;
+    paymentCompletedAt?: Date;
+  };
+  paymentMethod?: 'mpesa_stk' | 'mpesa_c2b' | 'cash' | 'bank_transfer';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -200,6 +215,25 @@ const orderSchema = new mongoose.Schema<IOrder>({
     resultDescription: String,
     paymentInitiatedAt: Date,
     paymentCompletedAt: Date,
+  },
+  // C2B payment fields
+  c2bPayment: {
+    transactionId: String,
+    mpesaReceiptNumber: String,
+    transactionDate: Date,
+    phoneNumber: String,
+    amountPaid: Number,
+    transactionType: String,
+    billRefNumber: String,
+    thirdPartyTransID: String,
+    orgAccountBalance: String,
+    customerName: String,
+    paymentCompletedAt: Date,
+  },
+  paymentMethod: {
+    type: String,
+    enum: ['mpesa_stk', 'mpesa_c2b', 'cash', 'bank_transfer'],
+    default: 'cash',
   },
 }, {
   timestamps: true,

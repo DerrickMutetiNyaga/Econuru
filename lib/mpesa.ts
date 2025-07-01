@@ -34,6 +34,53 @@ export interface STKCallbackData {
   amount?: number;
 }
 
+// C2B Register URL interfaces
+export interface C2BRegisterURLRequest {
+  shortCode: string;
+  responseType: 'Completed' | 'Cancelled';
+  confirmationURL: string;
+  validationURL: string;
+}
+
+export interface C2BRegisterURLResponse {
+  success: boolean;
+  originatorCoversationID?: string;
+  responseCode?: string;
+  responseDescription?: string;
+  error?: string;
+}
+
+export interface C2BValidationRequest {
+  transactionType: string;
+  transID: string;
+  transTime: string;
+  transAmount: string;
+  businessShortCode: string;
+  billRefNumber: string;
+  invoiceNumber?: string;
+  orgAccountBalance?: string;
+  thirdPartyTransID?: string;
+  msisdn: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+}
+
+export interface C2BConfirmationRequest extends C2BValidationRequest {
+  // Same structure as validation request
+}
+
+export interface C2BValidationResponse {
+  resultCode: string;
+  resultDesc: string;
+  thirdPartyTransID?: string;
+}
+
+export interface C2BConfirmationResponse {
+  resultCode: string; // Always "0" for success
+  resultDesc: string; // Usually "Success"
+}
+
 class MpesaService {
   private config: MpesaConfig;
 
@@ -261,6 +308,79 @@ class MpesaService {
     } catch (error) {
       console.error('STK status query error:', error);
       throw error;
+    }
+  }
+
+  async registerC2BURLs(): Promise<C2BRegisterURLResponse> {
+    try {
+      const accessToken = await this.generateAccessToken();
+      
+      // Get URLs from environment variables
+      const validationURL = process.env.MPESA_C2B_VALIDATION_URL;
+      const confirmationURL = process.env.MPESA_C2B_CONFIRMATION_URL;
+      const responseType = (process.env.MPESA_C2B_RESPONSE_TYPE as 'Completed' | 'Cancelled') || 'Completed';
+      
+      if (!validationURL || !confirmationURL) {
+        throw new Error('C2B validation and confirmation URLs must be configured in environment variables');
+      }
+
+      const payload: C2BRegisterURLRequest = {
+        shortCode: this.config.shortCode,
+        responseType: responseType,
+        confirmationURL: confirmationURL,
+        validationURL: validationURL
+      };
+
+      console.log('Registering C2B URLs:', JSON.stringify(payload, null, 2));
+
+      const response = await axios.post(
+        `${this.getBaseUrl()}/mpesa/c2b/v1/registerurl`,
+        {
+          ShortCode: payload.shortCode,
+          ResponseType: payload.responseType,
+          ConfirmationURL: payload.confirmationURL,
+          ValidationURL: payload.validationURL
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      console.log('C2B URL Registration response:', response.data);
+
+      if (response.data.ResponseCode === '0') {
+        return {
+          success: true,
+          originatorCoversationID: response.data.OriginatorCoversationID,
+          responseCode: response.data.ResponseCode,
+          responseDescription: response.data.ResponseDescription
+        };
+      } else {
+        return {
+          success: false,
+          responseCode: response.data.ResponseCode,
+          responseDescription: response.data.ResponseDescription,
+          error: response.data.ResponseDescription || 'C2B URL registration failed'
+        };
+      }
+    } catch (error: any) {
+      console.error('C2B URL registration error:', error);
+      
+      if (error.response) {
+        console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
+      }
+      
+      return {
+        success: false,
+        error: error.response?.data?.errorMessage || 
+               error.response?.data?.ResponseDescription ||
+               error.message || 
+               'C2B URL registration failed'
+      };
     }
   }
 }

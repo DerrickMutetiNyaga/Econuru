@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
       // Update order with successful payment details
       await Order.findByIdAndUpdate(order._id, {
         paymentStatus: 'paid',
+        paymentMethod: 'mpesa_stk',
         $set: {
           'mpesaPayment.mpesaReceiptNumber': mpesaReceiptNumber,
           'mpesaPayment.transactionDate': transactionDateObj,
@@ -95,6 +96,7 @@ export async function POST(request: NextRequest) {
       // Payment failed or cancelled
       await Order.findByIdAndUpdate(order._id, {
         paymentStatus: 'failed',
+        paymentMethod: 'mpesa_stk',
         $set: {
           'mpesaPayment.resultCode': resultCode,
           'mpesaPayment.resultDescription': resultDesc,

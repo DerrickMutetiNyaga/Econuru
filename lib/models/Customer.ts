@@ -11,6 +11,11 @@ export interface ICustomer extends mongoose.Document {
   status: 'active' | 'inactive' | 'vip' | 'premium' | 'new';
   preferences: string[];
   notes?: string;
+  // C2B payment tracking
+  createdViaPayment?: boolean;
+  lastPaymentDate?: Date;
+  lastPaymentAmount?: number;
+  lastTransactionId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +65,20 @@ const customerSchema = new mongoose.Schema<ICustomer>({
   notes: {
     type: String,
     trim: true,
+  },
+  // C2B payment tracking
+  createdViaPayment: {
+    type: Boolean,
+    default: false,
+  },
+  lastPaymentDate: {
+    type: Date,
+  },
+  lastPaymentAmount: {
+    type: Number,
+  },
+  lastTransactionId: {
+    type: String,
   },
 }, {
   timestamps: true,
