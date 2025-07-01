@@ -193,92 +193,92 @@ export default function PaymentsPage() {
               Export CSV
             </Button>
             <Button onClick={loadPayments} variant="outline" size="sm">
-              <RefreshCw className="w-4 h-4 mr-2" />
+            <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
-            </Button>
+          </Button>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
-                Total Revenue
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    Total Revenue
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">
                 Ksh {stats.totalAmount.toLocaleString()}
-              </div>
-              <div className="flex items-center gap-1 mt-1">
-                <TrendingUp className="w-4 h-4 text-green-600" />
-                <span className="text-sm text-green-600">+12.5%</span>
-                <span className="text-sm text-gray-500">vs last month</span>
-              </div>
-            </CardContent>
-          </Card>
+                  </div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <TrendingUp className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-green-600">+12.5%</span>
+                    <span className="text-sm text-gray-500">vs last month</span>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <CheckCircle className="w-4 h-4" />
-                Successful Payments
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Successful Payments
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">
                 {stats.paidOrders}
-              </div>
-              <div className="text-sm text-gray-500 mt-1">
-                {stats.totalPayments > 0 ? 
+                  </div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {stats.totalPayments > 0 ? 
                   `${((stats.paidOrders / stats.totalPayments) * 100).toFixed(1)}% success rate` :
-                  'No payments yet'
-                }
-              </div>
-            </CardContent>
-          </Card>
+                      'No payments yet'
+                    }
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Pending Payments
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    Pending Payments
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-yellow-600">
                 {stats.pendingOrders}
-              </div>
-              <div className="text-sm text-gray-500 mt-1">
-                Awaiting customer action
-              </div>
-            </CardContent>
-          </Card>
+                  </div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    Awaiting customer action
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
                 <CalendarIcon className="w-4 h-4" />
                 Today's Revenue
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
               <div className="text-2xl font-bold text-green-600">
                 Ksh {stats.todayAmount.toLocaleString()}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
         {/* Filters */}
-        <Card>
+              <Card>
           <CardHeader>
             <CardTitle>Filter Payments</CardTitle>
             <CardDescription>Search and filter payment records</CardDescription>
-          </CardHeader>
-          <CardContent>
+                </CardHeader>
+                <CardContent>
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <Input
@@ -287,7 +287,7 @@ export default function PaymentsPage() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full"
                 />
-              </div>
+                  </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Payment Status" />
@@ -310,24 +310,24 @@ export default function PaymentsPage() {
                   <SelectItem value="cash">Cash</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-          </CardContent>
-        </Card>
+                  </div>
+                </CardContent>
+              </Card>
 
         {/* Payments Table */}
-        <Card>
-          <CardHeader>
+            <Card>
+              <CardHeader>
             <CardTitle>Payment Records ({filteredPayments.length})</CardTitle>
             <CardDescription>
               All payment transactions and their details
             </CardDescription>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
             {loading ? (
               <div className="flex items-center justify-center h-64">
                 <RefreshCw className="w-8 h-8 animate-spin" />
-              </div>
-            ) : (
+                  </div>
+                ) : (
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
@@ -363,20 +363,20 @@ export default function PaymentsPage() {
                                   {payment.customerEmail}
                                 </div>
                               )}
-                            </div>
+                          </div>
                           </TableCell>
                           <TableCell>{payment.customerPhone}</TableCell>
                           <TableCell>
-                            <div>
+                          <div>
                               <div className="font-medium">
                                 KES {payment.totalAmount.toLocaleString()}
                               </div>
                               {payment.amountPaid && payment.amountPaid !== payment.totalAmount && (
                                 <div className="text-sm text-muted-foreground">
                                   Paid: KES {payment.amountPaid.toLocaleString()}
-                                </div>
+                          </div>
                               )}
-                            </div>
+                        </div>
                           </TableCell>
                           <TableCell>
                             {getPaymentMethodBadge(payment.paymentMethod)}
@@ -398,18 +398,18 @@ export default function PaymentsPage() {
                               {format(new Date(payment.transactionDate || payment.createdAt), 'MMM dd, yyyy')}
                               <div className="text-xs text-muted-foreground">
                                 {format(new Date(payment.transactionDate || payment.createdAt), 'HH:mm')}
-                              </div>
-                            </div>
+                        </div>
+                      </div>
                           </TableCell>
                         </TableRow>
                       ))
                     )}
                   </TableBody>
                 </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
       </div>
     </div>
   );

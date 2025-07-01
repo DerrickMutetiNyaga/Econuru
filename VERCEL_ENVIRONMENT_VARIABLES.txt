@@ -1,0 +1,43 @@
+# =============================================================================
+# VERCEL ENVIRONMENT VARIABLES FOR ECONURU.CO.KE
+# Copy these EXACTLY to your Vercel Dashboard > Settings > Environment Variables
+# =============================================================================
+
+# M-Pesa Configuration (Production)
+MPESA_CONSUMER_KEY=H8pg5VVGOWplnPvJmLTQJuBgUMN2CWvG
+MPESA_CONSUMER_SECRET=dEq0sW9L0zHCnfdn
+MPESA_PASSKEY=16346bcbe82536b2c082f7bd00432c8984ffff24686e685ca986458196131955
+MPESA_SHORT_CODE=7092156
+MPESA_ENVIRONMENT=production
+
+# Domain Configuration (Production)
+NEXT_PUBLIC_BASE_URL=https://econuru.co.ke
+NEXT_PUBLIC_APP_URL=https://econuru.co.ke
+NEXT_PUBLIC_API_URL=https://econuru.co.ke/api
+
+# M-Pesa Callback URL (Production)
+MPESA_CALLBACK_URL=https://econuru.co.ke/api/mpesa/callback
+
+# MongoDB Configuration
+MONGODB_URI=your-mongodb-connection-string-here
+
+# JWT Secret
+JWT_SECRET=your-jwt-secret-here
+
+# Cloudinary Configuration (if you use it)
+CLOUDINARY_CLOUD_NAME=your-cloudinary-cloud-name
+CLOUDINARY_API_KEY=your-cloudinary-api-key
+CLOUDINARY_API_SECRET=your-cloudinary-api-secret
+
+# SMS Configuration (if you use it)
+SMS_USER_ID=your-sms-username
+SMS_PASSWORD=your-sms-password
+SMS_SENDER_ID=ECONURU
+
+# =============================================================================
+# INSTRUCTIONS:
+# 1. Go to Vercel Dashboard > Your Project > Settings > Environment Variables
+# 2. Add each variable above (Key = Name, Value = the part after =)
+# 3. Set Environment to "Production" for all variables
+# 4. Deploy your project
+# ============================================================================= 

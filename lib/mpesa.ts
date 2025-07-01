@@ -292,6 +292,14 @@ class MpesaService {
         CheckoutRequestID: checkoutRequestId
       };
 
+      console.log('M-Pesa Status Query Configuration:', {
+        shortCode: this.config.shortCode,
+        environment: this.config.environment,
+        baseUrl: this.getBaseUrl(),
+        checkoutRequestId: checkoutRequestId
+      });
+      console.log('Status query payload:', JSON.stringify(payload, null, 2));
+
       const response = await axios.post(
         `${this.getBaseUrl()}/mpesa/stkpushquery/v1/query`,
         payload,
@@ -304,10 +312,29 @@ class MpesaService {
         }
       );
 
+      console.log('STK status query response:', JSON.stringify(response.data, null, 2));
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('STK status query error:', error);
-      throw error;
+      
+      // Log detailed error information
+      if (error.response) {
+        console.error('Status query error response status:', error.response.status);
+        console.error('Status query error response headers:', error.response.headers);
+        console.error('Status query error response data:', JSON.stringify(error.response.data, null, 2));
+      }
+      
+      // Return a structured error response instead of throwing
+      return {
+        success: false,
+        error: error.response?.data?.errorMessage || 
+               error.response?.data?.ResponseDescription ||
+               error.response?.data?.message ||
+               error.message || 
+               'STK status query failed',
+        resultCode: error.response?.data?.ResultCode || 'ERROR',
+        resultDesc: error.response?.data?.ResultDesc || 'Query failed'
+      };
     }
   }
 

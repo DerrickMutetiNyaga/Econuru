@@ -1,0 +1,48 @@
+# ECONURU VERCEL DEPLOYMENT - COMPLETE GUIDE
+
+## STEP 1: VERCEL SETUP
+1. Go to vercel.com and sign in
+2. Import your GitHub repository
+3. Deploy (will fail first time - that's expected)
+
+## STEP 2: ADD ENVIRONMENT VARIABLES
+Go to Vercel Dashboard > Settings > Environment Variables
+
+Add these EXACTLY:
+
+MPESA_CONSUMER_KEY=H8pg5VVGOWplnPvJmLTQJuBgUMN2CWvG
+MPESA_CONSUMER_SECRET=dEq0sW9L0zHCnfdn
+MPESA_PASSKEY=16346bcbe82536b2c082f7bd00432c8984ffff24686e685ca986458196131955
+MPESA_SHORT_CODE=7092156
+MPESA_ENVIRONMENT=production
+
+NEXT_PUBLIC_BASE_URL=https://econuru.co.ke
+NEXT_PUBLIC_APP_URL=https://econuru.co.ke
+NEXT_PUBLIC_API_URL=https://econuru.co.ke/api
+
+MPESA_CALLBACK_URL=https://econuru.co.ke/api/mpesa/callback
+
+MONGODB_URI=your-actual-mongodb-connection-string
+JWT_SECRET=your-actual-jwt-secret
+
+Set Environment to "Production" for all variables.
+
+## STEP 3: ADD DOMAIN
+1. Vercel Dashboard > Settings > Domains  
+2. Add Domain: econuru.co.ke
+3. Follow DNS instructions from Vercel
+
+## STEP 4: REDEPLOY
+1. Go to Deployments tab
+2. Click latest deployment  
+3. Click "Redeploy"
+4. Wait for completion
+
+## STEP 5: TEST M-PESA
+1. Visit https://econuru.co.ke/admin/orders
+2. Process test payment with your phone
+3. Should receive STK Push immediately
+4. Payment should complete and update order
+
+## SUCCESS!
+Your Econuru app is now live with M-Pesa at econuru.co.ke 

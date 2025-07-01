@@ -40,13 +40,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Order is already paid' }, { status: 400 });
     }
     
-    // Use callback URL from environment variables
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : 'http://localhost:3000';
-    const callbackUrl = process.env.MPESA_CALLBACK_URL || `${baseUrl}/api/mpesa/callback`;
+    // Use callback URL from environment variables (prioritize explicit MPESA_CALLBACK_URL)
+    const callbackUrl = process.env.MPESA_CALLBACK_URL || 
+      `${process.env.NEXT_PUBLIC_BASE_URL || 'https://www.econuru.co.ke'}/api/mpesa/callback`;
     
     console.log('Using M-Pesa callback URL:', callbackUrl);
+    
+    // Validate callback URL format
+    if (!callbackUrl.startsWith('https://')) {
+      console.error('Invalid callback URL - must use HTTPS:', callbackUrl);
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid callback URL configuration - must use HTTPS'
+      }, { status: 500 });
+    }
 
     const result = await mpesaService.initiateSTKPush({
       phoneNumber,

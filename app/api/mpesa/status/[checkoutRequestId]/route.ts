@@ -64,53 +64,13 @@ export async function GET(
     }
 
     // If payment is still pending, query M-Pesa for current status
-    try {
-      const statusResponse = await mpesaService.querySTKStatus(checkoutRequestId);
+    const statusResponse = await mpesaService.querySTKStatus(checkoutRequestId);
+    
+    // Check if the status query was successful
+    if (statusResponse.success === false) {
+      console.error('M-Pesa status query failed:', statusResponse.error);
       
-      // Update order based on M-Pesa response
-      if (statusResponse.ResultCode === '0') {
-        // Payment successful
-        await Order.findByIdAndUpdate(order._id, {
-          paymentStatus: 'paid',
-          resultCode: 0,
-          resultDescription: statusResponse.ResultDesc,
-          paymentCompletedAt: new Date()
-        });
-      } else if (statusResponse.ResultCode && statusResponse.ResultCode !== '1032') {
-        // Payment failed (1032 means still pending)
-        await Order.findByIdAndUpdate(order._id, {
-          paymentStatus: 'failed',
-          resultCode: parseInt(statusResponse.ResultCode),
-          resultDescription: statusResponse.ResultDesc,
-          paymentCompletedAt: new Date()
-        });
-      }
-
-      // Fetch updated order
-      const updatedOrder = await Order.findById(order._id);
-
-      return NextResponse.json({
-        success: true,
-        order: {
-          _id: updatedOrder._id,
-          orderNumber: updatedOrder.orderNumber,
-          paymentStatus: updatedOrder.paymentStatus,
-          checkoutRequestId: updatedOrder.checkoutRequestId,
-          phoneNumber: updatedOrder.phoneNumber,
-          mpesaReceiptNumber: updatedOrder.mpesaReceiptNumber,
-          amountPaid: updatedOrder.amountPaid,
-          resultCode: updatedOrder.resultCode,
-          resultDescription: updatedOrder.resultDescription,
-          paymentInitiatedAt: updatedOrder.paymentInitiatedAt,
-          paymentCompletedAt: updatedOrder.paymentCompletedAt
-        },
-        mpesaResponse: statusResponse
-      });
-
-    } catch (mpesaError) {
-      console.error('M-Pesa status query error:', mpesaError);
-      
-      // Return current order status even if M-Pesa query fails
+      // Return current order status with error info
       return NextResponse.json({
         success: true,
         order: {
@@ -126,9 +86,50 @@ export async function GET(
           paymentInitiatedAt: order.paymentInitiatedAt,
           paymentCompletedAt: order.paymentCompletedAt
         },
-        error: 'Failed to query M-Pesa status'
+        error: 'Failed to query M-Pesa status',
+        mpesaError: statusResponse.error
       });
     }
+    
+    // Update order based on M-Pesa response
+    if (statusResponse.ResultCode === '0') {
+      // Payment successful
+      await Order.findByIdAndUpdate(order._id, {
+        paymentStatus: 'paid',
+        resultCode: 0,
+        resultDescription: statusResponse.ResultDesc,
+        paymentCompletedAt: new Date()
+      });
+    } else if (statusResponse.ResultCode && statusResponse.ResultCode !== '1032') {
+      // Payment failed (1032 means still pending)
+      await Order.findByIdAndUpdate(order._id, {
+        paymentStatus: 'failed',
+        resultCode: parseInt(statusResponse.ResultCode),
+        resultDescription: statusResponse.ResultDesc,
+        paymentCompletedAt: new Date()
+      });
+    }
+
+    // Fetch updated order
+    const updatedOrder = await Order.findById(order._id);
+
+    return NextResponse.json({
+      success: true,
+      order: {
+        _id: updatedOrder._id,
+        orderNumber: updatedOrder.orderNumber,
+        paymentStatus: updatedOrder.paymentStatus,
+        checkoutRequestId: updatedOrder.checkoutRequestId,
+        phoneNumber: updatedOrder.phoneNumber,
+        mpesaReceiptNumber: updatedOrder.mpesaReceiptNumber,
+        amountPaid: updatedOrder.amountPaid,
+        resultCode: updatedOrder.resultCode,
+        resultDescription: updatedOrder.resultDescription,
+        paymentInitiatedAt: updatedOrder.paymentInitiatedAt,
+        paymentCompletedAt: updatedOrder.paymentCompletedAt
+      },
+      mpesaResponse: statusResponse
+    });
 
   } catch (error) {
     console.error('Payment status check error:', error);

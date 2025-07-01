@@ -22,9 +22,12 @@ export async function POST(request: NextRequest) {
       ResultDesc: resultDesc
     } = stkCallback;
 
-    // Find the order by checkout request ID
+    // Find the order by checkout request ID (check both top-level and nested fields)
     const order = await Order.findOne({
-      'mpesaPayment.checkoutRequestId': checkoutRequestId
+      $or: [
+        { checkoutRequestId: checkoutRequestId },
+        { 'mpesaPayment.checkoutRequestId': checkoutRequestId }
+      ]
     });
 
     if (!order) {
@@ -75,10 +78,17 @@ export async function POST(request: NextRequest) {
         transactionDateObj = new Date(year, month, day, hour, minute, second);
       }
 
-      // Update order with successful payment details
+      // Update order with successful payment details (both top-level and nested for compatibility)
       await Order.findByIdAndUpdate(order._id, {
         paymentStatus: 'paid',
         paymentMethod: 'mpesa_stk',
+        mpesaReceiptNumber: mpesaReceiptNumber,
+        transactionDate: transactionDateObj,
+        phoneNumber: phoneNumber,
+        amountPaid: amount,
+        resultCode: resultCode,
+        resultDescription: resultDesc,
+        paymentCompletedAt: new Date(),
         $set: {
           'mpesaPayment.mpesaReceiptNumber': mpesaReceiptNumber,
           'mpesaPayment.transactionDate': transactionDateObj,
@@ -97,6 +107,9 @@ export async function POST(request: NextRequest) {
       await Order.findByIdAndUpdate(order._id, {
         paymentStatus: 'failed',
         paymentMethod: 'mpesa_stk',
+        resultCode: resultCode,
+        resultDescription: resultDesc,
+        paymentCompletedAt: new Date(),
         $set: {
           'mpesaPayment.resultCode': resultCode,
           'mpesaPayment.resultDescription': resultDesc,
