@@ -323,6 +323,11 @@ export default function MpesaTransactionsPage() {
   const formatOrderId = (orderId: any, maxLength: number = 8) => {
     if (!orderId) return 'Unknown';
     
+    // Handle populated order objects with order number
+    if (typeof orderId === 'object' && orderId.orderNumber) {
+      return orderId.orderNumber; // Return the full order number for populated objects
+    }
+    
     // Handle MongoDB ObjectId or other objects
     let idStr: string;
     if (typeof orderId === 'object' && orderId._id) {
