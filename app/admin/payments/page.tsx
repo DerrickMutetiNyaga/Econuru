@@ -51,6 +51,9 @@ interface Payment {
   phoneNumber?: string;
   createdAt: string;
   updatedAt: string;
+  isConnectedToOrder?: boolean;
+  transactionId?: string;
+  notes?: string;
 }
 
 interface PaymentStats {
@@ -67,6 +70,7 @@ export default function PaymentsPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [mpesaTransactions, setMpesaTransactions] = useState<Payment[]>([]);
   const [stats, setStats] = useState<PaymentStats>({
     totalPayments: 0,
     totalAmount: 0,
@@ -113,6 +117,7 @@ export default function PaymentsPage() {
           stats: data.stats
         });
         setPayments(data.payments || []);
+        setMpesaTransactions(data.mpesaTransactions || []);
         setStats(data.stats || stats);
       } else {
         // Get the error details
@@ -177,7 +182,13 @@ export default function PaymentsPage() {
     }
   };
 
-  const filteredPayments = payments.filter(payment => {
+  // Combine orders and M-Pesa transactions for unified view
+  const allTransactions = [
+    ...payments,
+    ...mpesaTransactions.filter(tx => !payments.find(p => p.mpesaReceiptNumber === tx.mpesaReceiptNumber))
+  ];
+
+  const filteredPayments = allTransactions.filter(payment => {
     const matchesSearch = 
       payment.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       payment.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -194,10 +205,14 @@ export default function PaymentsPage() {
     switch (status) {
       case 'paid':
         return <Badge variant="default" className="bg-green-500">Paid</Badge>;
+      case 'partially_paid':
+        return <Badge variant="default" className="bg-yellow-500">Partial</Badge>;
       case 'pending':
         return <Badge variant="secondary">Pending</Badge>;
       case 'failed':
         return <Badge variant="destructive">Failed</Badge>;
+      case 'unconnected':
+        return <Badge variant="outline" className="bg-orange-100 text-orange-700">Unconnected</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -385,8 +400,10 @@ export default function PaymentsPage() {
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="partially_paid">Partially Paid</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="unconnected">Unconnected</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
@@ -484,7 +501,15 @@ export default function PaymentsPage() {
                               {payment.amountPaid && payment.amountPaid !== payment.totalAmount && (
                                 <div className="text-sm text-muted-foreground">
                                   Paid: KES {payment.amountPaid.toLocaleString()}
+                                  {payment.paymentStatus === 'partially_paid' && (
+                                    <span className="text-yellow-600 ml-1">(Partial)</span>
+                                  )}
                           </div>
+                              )}
+                              {payment.paymentStatus === 'unconnected' && (
+                                <div className="text-sm text-orange-600">
+                                  Unconnected Transaction
+                                </div>
                               )}
                         </div>
                           </TableCell>
@@ -558,7 +583,7 @@ export default function PaymentsPage() {
                     <div>
                       <p className="text-sm text-green-600 font-medium">STK Push Payments</p>
                       <p className="text-2xl font-bold text-green-700">
-                        {filteredPayments.filter(p => p.paymentMethod === 'mpesa_stk').length}
+                        {allTransactions.filter(p => p.paymentMethod === 'mpesa_stk').length}
                       </p>
                     </div>
                     <Smartphone className="w-8 h-8 text-green-600" />
@@ -570,7 +595,7 @@ export default function PaymentsPage() {
                     <div>
                       <p className="text-sm text-blue-600 font-medium">C2B Payments</p>
                       <p className="text-2xl font-bold text-blue-700">
-                        {filteredPayments.filter(p => p.paymentMethod === 'mpesa_c2b').length}
+                        {allTransactions.filter(p => p.paymentMethod === 'mpesa_c2b').length}
                       </p>
                     </div>
                     <CreditCard className="w-8 h-8 text-blue-600" />
@@ -582,9 +607,9 @@ export default function PaymentsPage() {
                     <div>
                       <p className="text-sm text-purple-600 font-medium">Total M-Pesa Revenue</p>
                       <p className="text-2xl font-bold text-purple-700">
-                        KES {filteredPayments
-                          .filter(p => p.paymentMethod.includes('mpesa') && p.paymentStatus === 'paid')
-                          .reduce((sum, p) => sum + p.totalAmount, 0)
+                        KES {allTransactions
+                          .filter(p => p.paymentMethod.includes('mpesa') && (p.paymentStatus === 'paid' || p.paymentStatus === 'partially_paid'))
+                          .reduce((sum, p) => sum + (p.amountPaid || p.totalAmount), 0)
                           .toLocaleString()}
                       </p>
                     </div>
@@ -596,7 +621,7 @@ export default function PaymentsPage() {
               {/* M-Pesa Transactions List */}
               <div className="space-y-3">
                 <h4 className="font-semibold text-lg">Recent M-Pesa Transactions</h4>
-                {filteredPayments
+                {allTransactions
                   .filter(payment => payment.paymentMethod.includes('mpesa'))
                   .slice(0, 10)
                   .map((payment) => (
@@ -677,7 +702,7 @@ export default function PaymentsPage() {
                     </div>
                   ))}
                 
-                {filteredPayments.filter(p => p.paymentMethod.includes('mpesa')).length === 0 && (
+                {allTransactions.filter(p => p.paymentMethod.includes('mpesa')).length === 0 && (
                   <div className="text-center py-8">
                     <Smartphone className="w-12 h-12 text-gray-400 mx-auto mb-2" />
                     <p className="text-gray-500">No M-Pesa transactions found</p>

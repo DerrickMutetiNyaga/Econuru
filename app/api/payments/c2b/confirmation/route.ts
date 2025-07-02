@@ -75,9 +75,14 @@ export async function POST(request: NextRequest) {
         });
 
         if (order) {
+          // Check if payment amount matches order total (handle partial payments)
+          const orderTotal = order.totalAmount || 0;
+          const isPartialPayment = amount < orderTotal;
+          const paymentStatus = isPartialPayment ? 'partially_paid' : 'paid';
+
           // Update order with payment details
           await Order.findByIdAndUpdate(order._id, {
-            paymentStatus: 'paid',
+            paymentStatus: paymentStatus,
             paymentMethod: 'mpesa_c2b',
             $set: {
               'c2bPayment': {
@@ -97,7 +102,11 @@ export async function POST(request: NextRequest) {
           });
 
           orderUpdated = true;
-          console.log(`✅ Order ${order.orderNumber} updated with C2B payment: ${transID}`);
+          if (isPartialPayment) {
+            console.log(`⚠️ Partial C2B payment for order ${order.orderNumber}: KES ${amount} of KES ${orderTotal} (${transID})`);
+          } else {
+            console.log(`✅ Full C2B payment for order ${order.orderNumber}: ${transID} (KES ${amount})`);
+          }
         }
       } catch (error) {
         console.error('Error updating order:', error);
@@ -168,9 +177,12 @@ export async function POST(request: NextRequest) {
         if (matchingOrders.length === 1) {
           // Exact match found - update this order
           const matchedOrder = matchingOrders[0];
+          const orderTotal = matchedOrder.totalAmount || 0;
+          const isPartialPayment = amount < orderTotal;
+          const paymentStatus = isPartialPayment ? 'partially_paid' : 'paid';
           
           await Order.findByIdAndUpdate(matchedOrder._id, {
-            paymentStatus: 'paid',
+            paymentStatus: paymentStatus,
             paymentMethod: 'mpesa_c2b',
             $set: {
               'c2bPayment': {
@@ -190,7 +202,11 @@ export async function POST(request: NextRequest) {
           });
 
           orderUpdated = true;
-          console.log(`✅ Order ${matchedOrder.orderNumber} matched and updated with C2B payment: ${transID}`);
+          if (isPartialPayment) {
+            console.log(`⚠️ Partial payment matched to order ${matchedOrder.orderNumber}: KES ${amount} of KES ${orderTotal} (${transID})`);
+          } else {
+            console.log(`✅ Order ${matchedOrder.orderNumber} matched and updated with C2B payment: ${transID}`);
+          }
           console.log(`📊 Match criteria: Amount=${amount}, Time window=2hrs, Customer=${[firstName, middleName, lastName].filter(Boolean).join(' ')}`);
           
         } else if (matchingOrders.length > 1) {

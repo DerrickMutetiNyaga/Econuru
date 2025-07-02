@@ -3,6 +3,7 @@ import { mpesaService } from '@/lib/mpesa';
 import connectDB from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
 import { getTokenFromRequest, verifyToken } from '@/lib/auth';
+import MpesaTransaction from '@/lib/models/MpesaTransaction';
 
 export async function POST(request: NextRequest) {
   try {

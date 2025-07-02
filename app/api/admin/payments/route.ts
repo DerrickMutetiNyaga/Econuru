@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
+import MpesaTransaction from '@/lib/models/MpesaTransaction';
 import { getTokenFromRequest, verifyToken } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -32,6 +33,14 @@ export async function GET(request: NextRequest) {
       .lean();
     
     console.log(`📊 Found ${orders.length} orders in database`);
+
+    // Also fetch M-Pesa transactions (both connected and unconnected)
+    const mpesaTransactions = await MpesaTransaction.find({})
+      .populate('connectedOrderId', 'orderNumber customer')
+      .sort({ transactionDate: -1 })
+      .lean();
+    
+    console.log(`📱 Found ${mpesaTransactions.length} M-Pesa transactions in database`);
 
     // Transform orders into payment records
     const payments = orders.map(order => {
@@ -113,12 +122,35 @@ export async function GET(request: NextRequest) {
       todayAmount
     };
 
+    // Add M-Pesa transactions to the response
+    const mpesaTransactionRecords = mpesaTransactions.map(transaction => ({
+      _id: transaction._id,
+      orderNumber: transaction.connectedOrderId?.orderNumber || 'Unconnected',
+      customerName: transaction.customerName,
+      customerPhone: transaction.phoneNumber,
+      customerEmail: transaction.connectedOrderId?.customer?.email || '',
+      paymentMethod: transaction.transactionType === 'STK_PUSH' ? 'mpesa_stk' : 'mpesa_c2b',
+      paymentStatus: transaction.isConnectedToOrder ? 'paid' : 'unconnected',
+      totalAmount: transaction.connectedOrderId?.totalAmount || transaction.amountPaid,
+      amountPaid: transaction.amountPaid,
+      mpesaReceiptNumber: transaction.mpesaReceiptNumber,
+      transactionDate: transaction.transactionDate,
+      phoneNumber: transaction.phoneNumber,
+      createdAt: transaction.createdAt,
+      updatedAt: transaction.updatedAt,
+      isConnectedToOrder: transaction.isConnectedToOrder,
+      connectedOrderId: transaction.connectedOrderId?._id,
+      transactionId: transaction.transactionId,
+      notes: transaction.notes
+    }));
+
     console.log('📈 Payment statistics:', stats);
-    console.log(`✅ Returning ${payments.length} payment records`);
+    console.log(`✅ Returning ${payments.length} payment records and ${mpesaTransactionRecords.length} M-Pesa transactions`);
 
     return NextResponse.json({
       success: true,
       payments,
+      mpesaTransactions: mpesaTransactionRecords,
       stats
     });
 

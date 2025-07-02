@@ -357,14 +357,19 @@ export default function MpesaTransactionsPage() {
                         {transaction.transactionId}
                       </code>
                     </div>
-                    <div className="text-right">
-                      <div className="font-bold text-lg">
-                        KES {transaction.amountPaid.toLocaleString()}
+                                          <div className="text-right">
+                        <div className="font-bold text-lg">
+                          KES {transaction.amountPaid.toLocaleString()}
+                        </div>
+                        {transaction.connectedOrderId && (
+                          <div className="text-xs text-blue-600">
+                            Order: {transaction.connectedOrderId.orderNumber}
+                          </div>
+                        )}
+                        <div className="text-sm text-gray-500">
+                          {format(new Date(transaction.transactionDate), 'MMM dd, HH:mm')}
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {format(new Date(transaction.transactionDate), 'MMM dd, HH:mm')}
-                      </div>
-                    </div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm mb-3">

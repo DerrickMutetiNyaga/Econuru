@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
+import MpesaTransaction from '@/lib/models/MpesaTransaction';
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,14 +79,44 @@ export async function POST(request: NextRequest) {
         transactionDateObj = new Date(year, month, day, hour, minute, second);
       }
 
-      // Update order with successful payment details (both top-level and nested for compatibility)
-      await Order.findByIdAndUpdate(order._id, {
-        paymentStatus: 'paid',
+      // Check if payment amount matches order total (handle partial payments)
+      const orderTotal = order.totalAmount || 0;
+      const amountPaid = parseFloat(amount) || 0;
+      const isPartialPayment = amountPaid < orderTotal;
+      const paymentStatus = isPartialPayment ? 'partially_paid' : 'paid';
+
+      // Store the transaction in MpesaTransaction collection
+      try {
+        const mpesaTransaction = new MpesaTransaction({
+          transactionId: mpesaReceiptNumber,
+          mpesaReceiptNumber: mpesaReceiptNumber,
+          transactionDate: transactionDateObj || new Date(),
+          phoneNumber: phoneNumber || 'Unknown',
+          amountPaid: amountPaid,
+          transactionType: 'STK_PUSH',
+          billRefNumber: order.orderNumber,
+          customerName: order.customer?.name || 'STK Push Customer',
+          paymentCompletedAt: new Date(),
+          isConnectedToOrder: true,
+          connectedOrderId: order._id,
+          connectedAt: new Date(),
+          connectedBy: 'system_auto_match',
+          notes: `STK Push payment for order ${order.orderNumber}. ${isPartialPayment ? `Partial payment: KES ${amountPaid} of KES ${orderTotal}` : 'Full payment received'}`
+        });
+
+        await mpesaTransaction.save();
+        console.log(`💾 STK Push transaction stored: ${mpesaReceiptNumber} (KES ${amountPaid})`);
+      } catch (transactionError) {
+        console.error('Error storing STK Push transaction:', transactionError);
+      }
+
+      // Update order with payment details
+      const orderUpdate: any = {
         paymentMethod: 'mpesa_stk',
         mpesaReceiptNumber: mpesaReceiptNumber,
         transactionDate: transactionDateObj,
         phoneNumber: phoneNumber,
-        amountPaid: amount,
+        amountPaid: amountPaid,
         resultCode: resultCode,
         resultDescription: resultDesc,
         paymentCompletedAt: new Date(),
@@ -93,14 +124,23 @@ export async function POST(request: NextRequest) {
           'mpesaPayment.mpesaReceiptNumber': mpesaReceiptNumber,
           'mpesaPayment.transactionDate': transactionDateObj,
           'mpesaPayment.phoneNumber': phoneNumber,
-          'mpesaPayment.amountPaid': amount,
+          'mpesaPayment.amountPaid': amountPaid,
           'mpesaPayment.resultCode': resultCode,
           'mpesaPayment.resultDescription': resultDesc,
           'mpesaPayment.paymentCompletedAt': new Date()
         }
-      });
+      };
 
-      console.log(`✅ Payment successful for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber}`);
+      // Set payment status based on amount comparison
+      orderUpdate.paymentStatus = paymentStatus;
+
+      await Order.findByIdAndUpdate(order._id, orderUpdate);
+
+      if (isPartialPayment) {
+        console.log(`⚠️ Partial payment received for order ${order.orderNumber}: KES ${amountPaid} of KES ${orderTotal} (Receipt: ${mpesaReceiptNumber})`);
+      } else {
+        console.log(`✅ Full payment successful for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid})`);
+      }
 
     } else {
       // Payment failed or cancelled

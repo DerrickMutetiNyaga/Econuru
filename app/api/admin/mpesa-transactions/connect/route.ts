@@ -54,9 +54,15 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Check if payment amount matches order total (handle partial payments)
+    const orderTotal = order.totalAmount || 0;
+    const amountPaid = transaction.amountPaid || 0;
+    const isPartialPayment = amountPaid < orderTotal;
+    const paymentStatus = isPartialPayment ? 'partially_paid' : 'paid';
+
     // Update the order with payment details
     await Order.findByIdAndUpdate(orderId, {
-      paymentStatus: 'paid',
+      paymentStatus: paymentStatus,
       paymentMethod: 'mpesa_c2b',
       $set: {
         'c2bPayment': {
@@ -84,11 +90,22 @@ export async function POST(request: NextRequest) {
       notes: `${transaction.notes} Connected to order ${order.orderNumber} by admin.`
     });
 
-    console.log(`🔗 Transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email}`);
+    const logMessage = isPartialPayment 
+      ? `🔗⚠️ Partial payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid} of KES ${orderTotal})`
+      : `🔗✅ Transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email}`;
+    
+    console.log(logMessage);
+
+    const successMessage = isPartialPayment
+      ? `Transaction ${transactionId} connected as partial payment (KES ${amountPaid} of KES ${orderTotal}) to order ${order.orderNumber}`
+      : `Transaction ${transactionId} successfully connected to order ${order.orderNumber}`;
 
     return NextResponse.json({
       success: true,
-      message: `Transaction ${transactionId} successfully connected to order ${order.orderNumber}`,
+      message: successMessage,
+      isPartialPayment: isPartialPayment,
+      amountPaid: amountPaid,
+      orderTotal: orderTotal,
       transaction: {
         id: transaction.transactionId,
         amount: transaction.amountPaid,
