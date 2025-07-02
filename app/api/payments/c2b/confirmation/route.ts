@@ -81,17 +81,40 @@ export async function POST(request: NextRequest) {
         if (order) {
           // Check if payment amount matches order total exactly (strict comparison)
           const orderTotal = order.totalAmount || 0;
-          const isExactPayment = amount === orderTotal;
-          const isPartialPayment = amount < orderTotal;
-          const isOverPayment = amount > orderTotal;
+          const currentRemainingBalance = order.remainingBalance || orderTotal;
+          const isExactPayment = amount === currentRemainingBalance;
+          const isPartialPayment = amount < currentRemainingBalance && amount > 0;
+          const isOverPayment = amount > currentRemainingBalance;
           
-          // Only mark as 'paid' if exact amount is received
-          const paymentStatus = isExactPayment ? 'paid' : 'partially_paid';
+          // Calculate new remaining balance
+          const newRemainingBalance = Math.max(0, currentRemainingBalance - amount);
+          const isFullyPaid = newRemainingBalance === 0;
+          
+          // Determine payment status
+          let paymentStatus = 'unpaid';
+          if (isFullyPaid) {
+            paymentStatus = 'paid';
+          } else if (isPartialPayment || isExactPayment) {
+            paymentStatus = 'partial';
+          }
 
-          // Update order with payment details
-          await Order.findByIdAndUpdate(order._id, {
+          // Create partial payment record
+          const partialPayment = {
+            amount: amount,
+            date: transactionDate,
+            mpesaReceiptNumber: transID,
+            phoneNumber: originalPhone,
+            method: 'mpesa_c2b' as const
+          };
+
+          // Update order with new balance and payment info
+          const updateData: any = {
+            remainingBalance: newRemainingBalance,
             paymentStatus: paymentStatus,
             paymentMethod: 'mpesa_c2b',
+            $push: {
+              partialPayments: partialPayment
+            },
             $set: {
               'c2bPayment': {
                 transactionId: transID,
@@ -107,15 +130,27 @@ export async function POST(request: NextRequest) {
                 paymentCompletedAt: new Date()
               }
             }
-          });
+          };
+
+          // If fully paid, also update top-level payment fields
+          if (isFullyPaid) {
+            updateData.amountPaid = orderTotal;
+            updateData.mpesaReceiptNumber = transID;
+            updateData.transactionDate = transactionDate;
+            updateData.phoneNumber = originalPhone;
+          }
+
+          await Order.findByIdAndUpdate(order._id, updateData);
 
           orderUpdated = true;
-          if (isExactPayment) {
-            console.log(`✅ EXACT C2B payment for order ${order.orderNumber}: ${transID} (KES ${amount})`);
+          if (isFullyPaid) {
+            console.log(`✅ FULL C2B payment for order ${order.orderNumber}: ${transID} (KES ${amount}) - Order fully paid`);
+          } else if (isExactPayment) {
+            console.log(`✅ EXACT C2B payment for order ${order.orderNumber}: ${transID} (KES ${amount}) - Remaining: KES ${newRemainingBalance}`);
           } else if (isOverPayment) {
-            console.log(`💰 C2B OVERPAYMENT for order ${order.orderNumber}: KES ${amount} (expected KES ${orderTotal}) - ${transID}`);
-          } else {
-            console.log(`⚠️ PARTIAL C2B payment for order ${order.orderNumber}: KES ${amount} of KES ${orderTotal} (${transID})`);
+            console.log(`💰 C2B OVERPAYMENT for order ${order.orderNumber}: KES ${amount} (remaining was KES ${currentRemainingBalance}) - ${transID}`);
+          } else if (isPartialPayment) {
+            console.log(`⚠️ PARTIAL C2B payment for order ${order.orderNumber}: KES ${amount} - Remaining: KES ${newRemainingBalance} (${transID})`);
           }
         }
       } catch (error) {
@@ -178,8 +213,11 @@ export async function POST(request: NextRequest) {
         const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
         
         const matchingOrders = await Order.find({
-          totalAmount: amount,
-          paymentStatus: { $in: ['unpaid', 'pending'] },
+          $or: [
+            { totalAmount: amount }, // Exact total amount match
+            { remainingBalance: amount } // Exact remaining balance match (for partial payments)
+          ],
+          paymentStatus: { $in: ['unpaid', 'pending', 'partial'] },
           createdAt: { $gte: twoHoursAgo },
           paymentMethod: { $ne: 'mpesa_c2b' } // Avoid already processed orders
         }).sort({ createdAt: -1 }); // Most recent first
@@ -188,16 +226,40 @@ export async function POST(request: NextRequest) {
           // Exact match found - update this order
           const matchedOrder = matchingOrders[0];
           const orderTotal = matchedOrder.totalAmount || 0;
-          const isExactPayment = amount === orderTotal;
-          const isPartialPayment = amount < orderTotal;
-          const isOverPayment = amount > orderTotal;
+          const currentRemainingBalance = matchedOrder.remainingBalance || orderTotal;
+          const isExactPayment = amount === currentRemainingBalance;
+          const isPartialPayment = amount < currentRemainingBalance && amount > 0;
+          const isOverPayment = amount > currentRemainingBalance;
           
-          // Only mark as 'paid' if exact amount is received
-          const paymentStatus = isExactPayment ? 'paid' : 'partially_paid';
+          // Calculate new remaining balance
+          const newRemainingBalance = Math.max(0, currentRemainingBalance - amount);
+          const isFullyPaid = newRemainingBalance === 0;
           
-          await Order.findByIdAndUpdate(matchedOrder._id, {
+          // Determine payment status
+          let paymentStatus = 'unpaid';
+          if (isFullyPaid) {
+            paymentStatus = 'paid';
+          } else if (isPartialPayment || isExactPayment) {
+            paymentStatus = 'partial';
+          }
+
+          // Create partial payment record
+          const partialPayment = {
+            amount: amount,
+            date: transactionDate,
+            mpesaReceiptNumber: transID,
+            phoneNumber: originalPhone,
+            method: 'mpesa_c2b' as const
+          };
+
+          // Update order with new balance and payment info
+          const updateData: any = {
+            remainingBalance: newRemainingBalance,
             paymentStatus: paymentStatus,
             paymentMethod: 'mpesa_c2b',
+            $push: {
+              partialPayments: partialPayment
+            },
             $set: {
               'c2bPayment': {
                 transactionId: transID,
@@ -213,15 +275,27 @@ export async function POST(request: NextRequest) {
                 paymentCompletedAt: new Date()
               }
             }
-          });
+          };
+
+          // If fully paid, also update top-level payment fields
+          if (isFullyPaid) {
+            updateData.amountPaid = orderTotal;
+            updateData.mpesaReceiptNumber = transID;
+            updateData.transactionDate = transactionDate;
+            updateData.phoneNumber = originalPhone;
+          }
+          
+          await Order.findByIdAndUpdate(matchedOrder._id, updateData);
 
           orderUpdated = true;
-          if (isExactPayment) {
-            console.log(`✅ EXACT payment matched to order ${matchedOrder.orderNumber}: ${transID} (KES ${amount})`);
+          if (isFullyPaid) {
+            console.log(`✅ FULL payment matched to order ${matchedOrder.orderNumber}: ${transID} (KES ${amount}) - Order fully paid`);
+          } else if (isExactPayment) {
+            console.log(`✅ EXACT payment matched to order ${matchedOrder.orderNumber}: ${transID} (KES ${amount}) - Remaining: KES ${newRemainingBalance}`);
           } else if (isOverPayment) {
-            console.log(`💰 OVERPAYMENT matched to order ${matchedOrder.orderNumber}: KES ${amount} (expected KES ${orderTotal}) - ${transID}`);
-          } else {
-            console.log(`⚠️ PARTIAL payment matched to order ${matchedOrder.orderNumber}: KES ${amount} of KES ${orderTotal} (${transID})`);
+            console.log(`💰 OVERPAYMENT matched to order ${matchedOrder.orderNumber}: KES ${amount} (remaining was KES ${currentRemainingBalance}) - ${transID}`);
+          } else if (isPartialPayment) {
+            console.log(`⚠️ PARTIAL payment matched to order ${matchedOrder.orderNumber}: KES ${amount} - Remaining: KES ${newRemainingBalance} (${transID})`);
           }
           console.log(`📊 Match criteria: Amount=${amount}, Time window=2hrs, Customer=${[firstName, middleName, lastName].filter(Boolean).join(' ')}`);
           
@@ -229,7 +303,7 @@ export async function POST(request: NextRequest) {
           // Multiple matches - log for manual review but create standalone record
           console.log(`⚠️ Multiple orders found with amount KES ${amount}:`);
           matchingOrders.forEach(order => {
-            console.log(`   - ${order.orderNumber} (${order.customer.name}) - ${order.createdAt}`);
+            console.log(`   - ${order.orderNumber} (${order.customer.name}) - Remaining: KES ${order.remainingBalance || order.totalAmount} - ${order.createdAt}`);
           });
           console.log(`🔄 Creating standalone payment record for manual matching`);
         } else {
