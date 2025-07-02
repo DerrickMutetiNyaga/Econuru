@@ -5,24 +5,33 @@ import { getTokenFromRequest, verifyToken } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('🔄 Payments API called');
+    
     // Verify admin authentication
     const token = getTokenFromRequest(request);
     if (!token) {
+      console.log('❌ No token provided');
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
     const decoded = verifyToken(token);
     if (!decoded || (decoded.role !== 'admin' && decoded.role !== 'superadmin')) {
+      console.log('❌ Invalid token or insufficient permissions');
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
+    console.log('✅ Authentication successful, connecting to DB...');
     await connectDB();
+    console.log('✅ Connected to MongoDB');
 
     // Fetch all orders with payment information
+    console.log('📦 Fetching orders from database...');
     const orders = await Order.find({})
       .select('orderNumber customer paymentStatus paymentMethod totalAmount amountPaid mpesaReceiptNumber transactionDate phoneNumber mpesaPayment c2bPayment createdAt updatedAt')
       .sort({ updatedAt: -1 })
       .lean();
+    
+    console.log(`📊 Found ${orders.length} orders in database`);
 
     // Transform orders into payment records
     const payments = orders.map(order => {
@@ -104,6 +113,9 @@ export async function GET(request: NextRequest) {
       todayAmount
     };
 
+    console.log('📈 Payment statistics:', stats);
+    console.log(`✅ Returning ${payments.length} payment records`);
+
     return NextResponse.json({
       success: true,
       payments,
@@ -111,7 +123,8 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Error fetching payments:', error);
+    console.error('❌ Error fetching payments:', error);
+    console.error('❌ Error stack:', error.stack);
     return NextResponse.json(
       { error: error.message || 'Internal server error' },
       { status: 500 }

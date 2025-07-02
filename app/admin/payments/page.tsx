@@ -92,28 +92,43 @@ export default function PaymentsPage() {
   const loadPayments = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Loading payments with token:', token ? 'Present' : 'Missing');
+      
       const response = await fetch('/api/admin/payments', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
       
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response ok:', response.ok);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Payments data received:', {
+          paymentsCount: data.payments?.length || 0,
+          stats: data.stats
+        });
         setPayments(data.payments || []);
         setStats(data.stats || stats);
       } else {
+        // Get the error details
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('❌ API Error:', response.status, errorData);
+        
+        // Show specific error message
+        const errorMessage = errorData.error || `HTTP ${response.status} error`;
         toast({
-          title: 'Error',
-          description: 'Failed to load payments',
+          title: 'Error Loading Payments',
+          description: errorMessage,
           variant: 'destructive',
         });
       }
     } catch (error) {
-      console.error('Error loading payments:', error);
+      console.error('❌ Network/Connection Error:', error);
       toast({
-        title: 'Error',
-        description: 'Error loading payments',
+        title: 'Connection Error',
+        description: 'Unable to connect to the server. Please check your connection.',
         variant: 'destructive',
       });
     } finally {
@@ -414,9 +429,21 @@ export default function PaymentsPage() {
                       <TableRow>
                         <TableCell colSpan={8} className="h-32 text-center">
                           <div className="flex flex-col items-center space-y-2">
-                            <AlertTriangle className="w-8 h-8 text-gray-400" />
-                            <p className="text-gray-500">No payment records found</p>
-                            <p className="text-sm text-gray-400">Try adjusting your filters or search terms</p>
+                            {payments.length === 0 ? (
+                              <>
+                                <Receipt className="w-8 h-8 text-gray-400" />
+                                <p className="text-gray-500">No payment records yet</p>
+                                <p className="text-sm text-gray-400">
+                                  Payment records will appear here when customers make M-Pesa payments
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <AlertTriangle className="w-8 h-8 text-gray-400" />
+                                <p className="text-gray-500">No payment records match your filters</p>
+                                <p className="text-sm text-gray-400">Try adjusting your filters or search terms</p>
+                              </>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
