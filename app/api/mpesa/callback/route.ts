@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
     const order = await Order.findOne({
       $or: [
         { checkoutRequestId: checkoutRequestId },
-        { 'mpesaPayment.checkoutRequestId': checkoutRequestId }
+        { 'mpesaPayment.checkoutRequestId': checkoutRequestId },
+        { 'pendingMpesaPayment.checkoutRequestId': checkoutRequestId }
       ]
     });
 
@@ -84,34 +85,35 @@ export async function POST(request: NextRequest) {
       const requestedAmount = order.pendingMpesaPayment?.amount || order.totalAmount || 0;
       const paymentType = order.pendingMpesaPayment?.paymentType || 'full';
       const orderTotal = order.totalAmount || 0;
+      const currentRemainingBalance = order.remainingBalance || orderTotal;
       const amountPaid = parseFloat(amount) || 0;
       
-      // Check if the payment matches what was requested (not necessarily the full order amount)
-      const isRequestedAmountPaid = amountPaid === parseFloat(requestedAmount);
-      const isFullOrderPayment = amountPaid === orderTotal;
-      const isPartialPayment = amountPaid < orderTotal;
-      const isOverPayment = amountPaid > orderTotal;
+      // Check if the payment matches what was requested exactly
+      const isExactAmountMatch = amountPaid === parseFloat(requestedAmount);
+      
+      console.log(`💰 Payment Analysis: Type=${paymentType}, Requested=${requestedAmount}, Paid=${amountPaid}, OrderTotal=${orderTotal}, RemainingBalance=${currentRemainingBalance}`);
 
-      // Log original phone number from Safaricom
-      console.log(`📱 STK Push - Phone number received from Safaricom: ${phoneNumber || 'Unknown'}`);
-      console.log(`💰 Payment Analysis: Type=${paymentType}, Requested=${requestedAmount}, Paid=${amountPaid}, OrderTotal=${orderTotal}`);
+      // Check for duplicate transactions
+      const existingTransaction = await MpesaTransaction.findOne({
+        mpesaReceiptNumber: mpesaReceiptNumber
+      });
 
-      if (isRequestedAmountPaid) {
-        // REQUESTED AMOUNT PAID: Create pending transaction for manual confirmation
+      if (existingTransaction) {
+        console.log(`⚠️ Transaction ${mpesaReceiptNumber} already exists, skipping duplicate`);
+        return NextResponse.json({ 
+          success: true, 
+          message: 'Duplicate transaction ignored' 
+        });
+      }
+
+      if (isExactAmountMatch) {
+        // EXACT AMOUNT MATCH: Auto-process the payment and subtract from balance
         try {
-          // Check if this transaction already exists to prevent duplicates
-          const existingTransaction = await MpesaTransaction.findOne({
-            mpesaReceiptNumber: mpesaReceiptNumber
-          });
-
-          if (existingTransaction) {
-            console.log(`⚠️ Transaction ${mpesaReceiptNumber} already exists, skipping duplicate`);
-            return NextResponse.json({ 
-              success: true, 
-              message: 'Duplicate transaction ignored' 
-            });
-          }
-
+          // Calculate new remaining balance
+          const newRemainingBalance = Math.max(0, currentRemainingBalance - amountPaid);
+          const isFullyPaid = newRemainingBalance === 0;
+          
+          // Create confirmed transaction record
           const mpesaTransaction = new MpesaTransaction({
             transactionId: mpesaReceiptNumber,
             mpesaReceiptNumber: mpesaReceiptNumber,
@@ -122,50 +124,90 @@ export async function POST(request: NextRequest) {
             billRefNumber: order.orderNumber,
             customerName: order.customer?.name || 'STK Push Customer',
             paymentCompletedAt: new Date(),
-            // Pending confirmation fields
-            confirmationStatus: 'pending',
+            // Auto-confirmed for exact matches
+            confirmationStatus: 'confirmed',
             pendingOrderId: order._id,
-            isConnectedToOrder: false, // Not connected until confirmed
-            notes: `STK Push payment pending confirmation for order ${order.orderNumber}. Expected: KES ${requestedAmount}, Received: KES ${amountPaid}. Payment type: ${paymentType}.`
+            isConnectedToOrder: true,
+            confirmedBy: 'SYSTEM',
+            confirmedCustomerName: order.customer?.name || 'Auto-confirmed',
+            confirmedAt: new Date(),
+            notes: `AUTO-CONFIRMED: STK Push exact amount match for order ${order.orderNumber}. Payment type: ${paymentType}. Amount: KES ${amountPaid}. ${isFullyPaid ? 'Order fully paid.' : `Remaining balance: KES ${newRemainingBalance}`}`
           });
 
           await mpesaTransaction.save();
 
-          // Update order with basic payment info but keep as pending
-          await Order.findByIdAndUpdate(order._id, {
-            paymentStatus: 'pending',
+          // Add to partial payments history
+          const partialPayment = {
+            amount: amountPaid,
+            date: transactionDateObj || new Date(),
+            mpesaReceiptNumber: mpesaReceiptNumber,
+            phoneNumber: phoneNumber || 'Unknown',
+            method: 'mpesa_stk' as const
+          };
+
+          // Update order with new balance and payment info
+          const updateData: any = {
+            remainingBalance: newRemainingBalance,
+            paymentStatus: isFullyPaid ? 'paid' : 'partial',
             paymentMethod: 'mpesa_stk',
             resultCode: resultCode,
             resultDescription: resultDesc,
+            paymentCompletedAt: new Date(),
+            $push: {
+              partialPayments: partialPayment
+            },
             $set: {
               'mpesaPayment.checkoutRequestId': checkoutRequestId,
+              'mpesaPayment.mpesaReceiptNumber': mpesaReceiptNumber,
+              'mpesaPayment.transactionDate': transactionDateObj,
+              'mpesaPayment.phoneNumber': phoneNumber,
+              'mpesaPayment.amountPaid': amountPaid,
               'mpesaPayment.resultCode': resultCode,
               'mpesaPayment.resultDescription': resultDesc,
-              'mpesaPayment.paymentCompletedAt': new Date()
+              'mpesaPayment.paymentCompletedAt': new Date(),
+              'pendingMpesaPayment.status': 'completed'
+            }
+          };
+
+          // If fully paid, also update top-level payment fields
+          if (isFullyPaid) {
+            updateData.amountPaid = orderTotal;
+            updateData.mpesaReceiptNumber = mpesaReceiptNumber;
+            updateData.transactionDate = transactionDateObj;
+            updateData.phoneNumber = phoneNumber;
+          }
+
+          await Order.findByIdAndUpdate(order._id, updateData);
+
+          // Create audit log
+          await PaymentAuditLog.create({
+            action: 'auto_confirm_payment',
+            transactionId: mpesaTransaction._id,
+            orderId: order._id,
+            adminId: null,
+            adminName: 'SYSTEM',
+            transactionAmount: amountPaid,
+            orderAmount: orderTotal,
+            paymentType: paymentType,
+            confirmedCustomerName: order.customer?.name || 'Auto-confirmed',
+            metadata: {
+              mpesaReceiptNumber: mpesaReceiptNumber,
+              phoneNumber: phoneNumber,
+              requestedAmount: requestedAmount,
+              isFullPayment: isFullyPaid,
+              previousBalance: currentRemainingBalance,
+              newBalance: newRemainingBalance,
+              autoConfirmed: true
             }
           });
 
-          console.log(`🟡 STK Push payment PENDING CONFIRMATION for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid}) - Requires admin verification`);
+          console.log(`✅ AUTO-CONFIRMED: STK Push payment for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid})`);
+          console.log(`💰 Balance Updated: ${currentRemainingBalance} → ${newRemainingBalance} (${isFullyPaid ? 'FULLY PAID' : 'PARTIAL'})`);
           
         } catch (transactionError) {
-          console.error('Error storing pending STK Push transaction:', transactionError);
-        }
-              } else {
-        // PAYMENT AMOUNT MISMATCH: Create unmatched transaction for manual review
-        try {
-          // Check if this transaction already exists to prevent duplicates
-          const existingTransaction = await MpesaTransaction.findOne({
-            mpesaReceiptNumber: mpesaReceiptNumber
-          });
-
-          if (existingTransaction) {
-            console.log(`⚠️ Transaction ${mpesaReceiptNumber} already exists, skipping duplicate`);
-            return NextResponse.json({ 
-              success: true, 
-              message: 'Duplicate transaction ignored' 
-            });
-          }
-
+          console.error('Error processing exact amount match:', transactionError);
+          
+          // Fallback: Create as unmatched if processing fails
           const mpesaTransaction = new MpesaTransaction({
             transactionId: mpesaReceiptNumber,
             mpesaReceiptNumber: mpesaReceiptNumber,
@@ -176,23 +218,45 @@ export async function POST(request: NextRequest) {
             billRefNumber: order.orderNumber,
             customerName: order.customer?.name || 'STK Push Customer',
             paymentCompletedAt: new Date(),
-            // Unmatched transaction - no pending order connection
             confirmationStatus: 'pending',
-            pendingOrderId: null, // No direct match
+            pendingOrderId: null,
             isConnectedToOrder: false,
-            notes: `STK Push payment AMOUNT MISMATCH for order ${order.orderNumber}. Expected: KES ${requestedAmount}, Received: KES ${amountPaid}, Order Total: KES ${orderTotal}. Requires manual connection.`
+            notes: `PROCESSING ERROR: STK Push exact match failed to process for order ${order.orderNumber}. Requires manual connection. Error: ${transactionError}`
+          });
+
+          await mpesaTransaction.save();
+        }
+      } else {
+        // AMOUNT MISMATCH: Create unmatched transaction for manual review
+        try {
+          const mpesaTransaction = new MpesaTransaction({
+            transactionId: mpesaReceiptNumber,
+            mpesaReceiptNumber: mpesaReceiptNumber,
+            transactionDate: transactionDateObj || new Date(),
+            phoneNumber: phoneNumber || 'Unknown',
+            amountPaid: amountPaid,
+            transactionType: 'STK_PUSH',
+            billRefNumber: order.orderNumber,
+            customerName: order.customer?.name || 'STK Push Customer',
+            paymentCompletedAt: new Date(),
+            // Unmatched transaction - no automatic connection
+            confirmationStatus: 'pending',
+            pendingOrderId: null,
+            isConnectedToOrder: false,
+            notes: `STK Push AMOUNT MISMATCH for order ${order.orderNumber}. Expected: KES ${requestedAmount}, Received: KES ${amountPaid}, Order Total: KES ${orderTotal}, Remaining: KES ${currentRemainingBalance}. Requires manual connection.`
           });
 
           await mpesaTransaction.save();
 
-          // Update order basic payment info but keep as unpaid
+          // Update order basic payment info but keep payment status unchanged
           await Order.findByIdAndUpdate(order._id, {
             resultCode: resultCode,
             resultDescription: resultDesc,
             $set: {
               'mpesaPayment.resultCode': resultCode,
               'mpesaPayment.resultDescription': resultDesc,
-              'mpesaPayment.paymentCompletedAt': new Date()
+              'mpesaPayment.paymentCompletedAt': new Date(),
+              'pendingMpesaPayment.status': 'failed'
             }
           });
 
@@ -214,7 +278,8 @@ export async function POST(request: NextRequest) {
         $set: {
           'mpesaPayment.resultCode': resultCode,
           'mpesaPayment.resultDescription': resultDesc,
-          'mpesaPayment.paymentCompletedAt': new Date()
+          'mpesaPayment.paymentCompletedAt': new Date(),
+          'pendingMpesaPayment.status': 'failed'
         }
       });
 

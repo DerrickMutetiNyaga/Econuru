@@ -65,9 +65,17 @@ interface Order {
   notes?: string;
   location: string;
   totalAmount: number;
+  remainingBalance?: number;
+  partialPayments?: Array<{
+    amount: number;
+    date: Date;
+    mpesaReceiptNumber: string;
+    phoneNumber: string;
+    method: 'mpesa_stk' | 'mpesa_c2b' | 'cash' | 'bank_transfer';
+  }>;
   pickDropAmount?: number;
   discount?: number;
-  paymentStatus?: 'unpaid' | 'paid' | 'partially_paid' | 'pending' | 'failed';
+  paymentStatus?: 'unpaid' | 'paid' | 'partial' | 'pending' | 'failed';
   amountPaid?: number;
   laundryStatus?: 'to-be-picked' | 'picked' | 'in-progress' | 'ready' | 'delivered';
   status: 'pending' | 'confirmed' | 'in-progress' | 'ready' | 'delivered' | 'cancelled';
@@ -398,7 +406,7 @@ export default function OrdersPage() {
     setPaymentType(type);
     if (orderForPayment) {
       if (type === 'full') {
-        setPaymentAmount(orderForPayment.totalAmount - (orderForPayment.amountPaid || 0));
+        setPaymentAmount(orderForPayment.remainingBalance || orderForPayment.totalAmount);
       } else {
         // For partial payment, allow user to enter any amount
         setPaymentAmount(0);
@@ -411,7 +419,7 @@ export default function OrdersPage() {
     setOrderForPayment(order);
     setPaymentPhone(order.customer.phone);
     setPaymentType('full');
-    setPaymentAmount(order.totalAmount - (order.amountPaid || 0));
+    setPaymentAmount(order.remainingBalance || order.totalAmount);
     setPaymentDialogOpen(true);
   };
 
@@ -729,7 +737,7 @@ export default function OrdersPage() {
         setOrders(prevOrders =>
           prevOrders.map(o =>
             o._id === orderForManualPayment._id
-              ? { ...o, paymentStatus: data.isExactPayment ? 'paid' : 'partially_paid', amountPaid: data.amountPaid }
+              ? { ...o, paymentStatus: data.isExactPayment ? 'paid' : 'partial', remainingBalance: data.remainingBalance }
               : o
           )
         );
@@ -738,8 +746,8 @@ export default function OrdersPage() {
         if (selectedOrder?._id === orderForManualPayment._id) {
           setSelectedOrder({
             ...selectedOrder,
-            paymentStatus: data.isExactPayment ? 'paid' : 'partially_paid',
-            amountPaid: data.amountPaid
+            paymentStatus: data.isExactPayment ? 'paid' : 'partial',
+            remainingBalance: data.remainingBalance
           });
         }
 
@@ -1389,10 +1397,10 @@ export default function OrdersPage() {
                           ? 'bg-red-100 text-red-800 border-red-200'
                           : 'bg-gray-100 text-gray-800 border-gray-200'
                       }`}>
-                        {(order.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial' : (order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
-                        {(order.paymentStatus || 'unpaid') === 'partially_paid' && order.amountPaid && (
+                        {(order.paymentStatus || 'unpaid') === 'partial' ? 'Partial' : (order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
+                        {(order.paymentStatus || 'unpaid') === 'partial' && order.remainingBalance && (
                           <span className="ml-1 text-xs">
-                            ({order.amountPaid.toLocaleString()}/{order.totalAmount.toLocaleString()})
+                            (Remaining: {order.remainingBalance.toLocaleString()})
                           </span>
                         )}
                       </Badge>
@@ -1519,37 +1527,27 @@ export default function OrdersPage() {
                         </div>
                         
                         {/* Payment Status Information */}
-                        {(order.paymentStatus === 'paid' || order.paymentStatus === 'partially_paid') && (
+                        {(order.paymentStatus === 'paid' || order.paymentStatus === 'partial') && (
                           <div className="mt-2 pt-2 border-t border-amber-200 space-y-1">
                             {order.paymentStatus === 'paid' && (
-                              <>
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-green-700 font-medium">Payment Status:</span>
-                                  <span className="text-green-700 font-bold">✅ FULLY PAID</span>
-                                </div>
-                                {order.amountPaid && order.amountPaid > order.totalAmount && (
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-blue-700 font-medium">Overpaid by:</span>
-                                    <span className="text-blue-700 font-bold">+Ksh {(order.amountPaid - order.totalAmount).toLocaleString()}</span>
-                                  </div>
-                                )}
-                              </>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-green-700 font-medium">Payment Status:</span>
+                                <span className="text-green-700 font-bold">✅ FULLY PAID</span>
+                              </div>
                             )}
-                            {order.paymentStatus === 'partially_paid' && order.amountPaid && (
+                            {order.paymentStatus === 'partial' && (
                               <>
                                 <div className="flex justify-between text-xs">
                                   <span className="text-yellow-700 font-medium">Amount Paid:</span>
-                                  <span className="text-yellow-700 font-bold">Ksh {order.amountPaid.toLocaleString()}</span>
+                                  <span className="text-yellow-700 font-bold">Ksh {((order.totalAmount || 0) - (order.remainingBalance || 0)).toLocaleString()}</span>
                                 </div>
-                                {order.amountPaid < order.totalAmount ? (
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-red-700 font-medium">Remaining:</span>
-                                    <span className="text-red-700 font-bold">Ksh {(order.totalAmount - order.amountPaid).toLocaleString()}</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex justify-between text-xs">
-                                    <span className="text-blue-700 font-medium">Overpaid by:</span>
-                                    <span className="text-blue-700 font-bold">+Ksh {(order.amountPaid - order.totalAmount).toLocaleString()}</span>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-red-700 font-medium">Remaining Balance:</span>
+                                  <span className="text-red-700 font-bold">Ksh {(order.remainingBalance || 0).toLocaleString()}</span>
+                                </div>
+                                {order.partialPayments && order.partialPayments.length > 0 && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    <span>{order.partialPayments.length} payment{order.partialPayments.length > 1 ? 's' : ''} made</span>
                                   </div>
                                 )}
                               </>
@@ -1571,7 +1569,7 @@ export default function OrdersPage() {
                           <Badge className={`text-xs px-2 py-1 ${
                             (order.paymentStatus || 'unpaid') === 'paid' 
                               ? 'bg-green-100 text-green-800 border-green-200' 
-                              : (order.paymentStatus || 'unpaid') === 'partially_paid'
+                              : (order.paymentStatus || 'unpaid') === 'partial'
                               ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
                               : (order.paymentStatus || 'unpaid') === 'pending'
                               ? 'bg-blue-100 text-blue-800 border-blue-200'
@@ -1579,11 +1577,11 @@ export default function OrdersPage() {
                               ? 'bg-red-100 text-red-800 border-red-200'
                               : 'bg-gray-100 text-gray-800 border-gray-200'
                           }`}>
-                            {(order.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial' : (order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
+                            {(order.paymentStatus || 'unpaid') === 'partial' ? 'Partial' : (order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
                           </Badge>
-                          {(order.paymentStatus || 'unpaid') === 'partially_paid' && order.amountPaid && (
+                          {(order.paymentStatus || 'unpaid') === 'partial' && order.remainingBalance && (
                             <div className="text-xs text-yellow-700 mt-1">
-                              KES {order.amountPaid.toLocaleString()} of KES {order.totalAmount.toLocaleString()}
+                              Remaining: KES {order.remainingBalance.toLocaleString()}
                             </div>
                           )}
                         </div>
@@ -1695,7 +1693,7 @@ export default function OrdersPage() {
 
                     {/* Payment Actions */}
                     <div className="flex gap-2 pt-2">
-                      {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed' || order.paymentStatus === 'partially_paid') && (
+                      {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed' || order.paymentStatus === 'partial') && (
                         <Button
                           size="sm"
                           onClick={(e) => {
@@ -1706,7 +1704,7 @@ export default function OrdersPage() {
                           className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           {initiatingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
-                          {order.paymentStatus === 'partially_paid' ? 'Request Balance' : 'Request Payment'}
+                          {order.paymentStatus === 'partial' ? 'Request Balance' : 'Request Payment'}
                         </Button>
                       )}
                       {order.paymentStatus === 'pending' && order.mpesaPayment?.checkoutRequestId && (
@@ -1798,7 +1796,7 @@ export default function OrdersPage() {
                           <Badge className={`text-xs px-2 py-1 ${
                             (order.paymentStatus || 'unpaid') === 'paid' 
                               ? 'bg-green-100 text-green-800 border-green-200' 
-                              : (order.paymentStatus || 'unpaid') === 'partially_paid'
+                              : (order.paymentStatus || 'unpaid') === 'partial'
                               ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
                               : (order.paymentStatus || 'unpaid') === 'pending'
                               ? 'bg-blue-100 text-blue-800 border-blue-200'
@@ -1806,10 +1804,10 @@ export default function OrdersPage() {
                               ? 'bg-red-100 text-red-800 border-red-200'
                               : 'bg-gray-100 text-gray-800 border-gray-200'
                           }`}>
-                            {(order.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial' : (order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
-                            {(order.paymentStatus || 'unpaid') === 'partially_paid' && order.amountPaid && (
+                            {(order.paymentStatus || 'unpaid') === 'partial' ? 'Partial' : (order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
+                            {(order.paymentStatus || 'unpaid') === 'partial' && order.remainingBalance && (
                               <span className="ml-1">
-                                ({order.amountPaid.toLocaleString()}/{order.totalAmount.toLocaleString()})
+                                (Remaining: {order.remainingBalance.toLocaleString()})
                               </span>
                             )}
                           </Badge>
@@ -1852,7 +1850,7 @@ export default function OrdersPage() {
                         )}
                         
                         {/* Payment Actions */}
-                        {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed' || order.paymentStatus === 'partially_paid') && (
+                        {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed' || order.paymentStatus === 'partial') && (
                           <Button
                             size="sm"
                             onClick={(e) => {
@@ -1861,7 +1859,7 @@ export default function OrdersPage() {
                             }}
                             disabled={initiatingPayment}
                             className="bg-blue-600 hover:bg-blue-700 text-white"
-                            title={order.paymentStatus === 'partially_paid' ? 'Request Balance Payment' : 'Request Payment'}
+                            title={order.paymentStatus === 'partial' ? 'Request Balance Payment' : 'Request Payment'}
                           >
                             {initiatingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
                           </Button>
@@ -2016,7 +2014,7 @@ export default function OrdersPage() {
                     <Badge className={`${
                       (selectedOrder.paymentStatus || 'unpaid') === 'paid' 
                         ? 'bg-green-100 text-green-800 border-green-200' 
-                        : (selectedOrder.paymentStatus || 'unpaid') === 'partially_paid'
+                        : (selectedOrder.paymentStatus || 'unpaid') === 'partial'
                         ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
                         : (selectedOrder.paymentStatus || 'unpaid') === 'pending'
                         ? 'bg-blue-100 text-blue-800 border-blue-200'
@@ -2024,10 +2022,10 @@ export default function OrdersPage() {
                         ? 'bg-red-100 text-red-800 border-red-200'
                         : 'bg-gray-100 text-gray-800 border-gray-200'
                     }`}>
-                      {(selectedOrder.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial Payment' : (selectedOrder.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (selectedOrder.paymentStatus || 'unpaid').slice(1)}
-                      {(selectedOrder.paymentStatus || 'unpaid') === 'partially_paid' && selectedOrder.amountPaid && (
+                      {(selectedOrder.paymentStatus || 'unpaid') === 'partial' ? 'Partial Payment' : (selectedOrder.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (selectedOrder.paymentStatus || 'unpaid').slice(1)}
+                      {(selectedOrder.paymentStatus || 'unpaid') === 'partial' && selectedOrder.remainingBalance && (
                         <span className="ml-2 text-xs">
-                          (KES {selectedOrder.amountPaid.toLocaleString()}/{selectedOrder.totalAmount.toLocaleString()})
+                          (Remaining: KES {selectedOrder.remainingBalance.toLocaleString()})
                         </span>
                       )}
                     </Badge>
@@ -2134,9 +2132,9 @@ export default function OrdersPage() {
                       </div>
                     </div>
                     
-                    {/* Manual Payment Connection - Show for unpaid or partially paid orders */}
+                    {/* Manual Payment Connection - Show for unpaid or partial paid orders */}
                     {((selectedOrder.paymentStatus || 'unpaid') === 'unpaid' || 
-                      (selectedOrder.paymentStatus || 'unpaid') === 'partially_paid') && (
+                      (selectedOrder.paymentStatus || 'unpaid') === 'partial') && (
                       <div className="border-t pt-3">
                         <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
                           <div className="flex items-center justify-between">
@@ -2177,7 +2175,7 @@ export default function OrdersPage() {
                       <Badge className={`${
                         (selectedOrder.paymentStatus || 'unpaid') === 'paid' 
                           ? 'bg-green-100 text-green-800 border-green-200' 
-                          : (selectedOrder.paymentStatus || 'unpaid') === 'partially_paid'
+                          : (selectedOrder.paymentStatus || 'unpaid') === 'partial'
                           ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
                           : (selectedOrder.paymentStatus || 'unpaid') === 'pending'
                           ? 'bg-blue-100 text-blue-800 border-blue-200'
@@ -2185,13 +2183,19 @@ export default function OrdersPage() {
                           ? 'bg-red-100 text-red-800 border-red-200'
                           : 'bg-gray-100 text-gray-800 border-gray-200'
                       }`}>
-                        {(selectedOrder.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial Payment' : (selectedOrder.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (selectedOrder.paymentStatus || 'unpaid').slice(1)}
+                        {(selectedOrder.paymentStatus || 'unpaid') === 'partial' ? 'Partial Payment' : (selectedOrder.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (selectedOrder.paymentStatus || 'unpaid').slice(1)}
                       </Badge>
-                      {(selectedOrder.paymentStatus || 'unpaid') === 'partially_paid' && selectedOrder.amountPaid && (
+                      {(selectedOrder.paymentStatus || 'unpaid') === 'partial' && (
                         <div className="text-sm text-yellow-700 mt-2">
-                          <strong>Amount Paid:</strong> KES {selectedOrder.amountPaid.toLocaleString()} of KES {selectedOrder.totalAmount.toLocaleString()}
+                          <strong>Amount Paid:</strong> KES {((selectedOrder.totalAmount || 0) - (selectedOrder.remainingBalance || 0)).toLocaleString()}
                           <br />
-                          <strong>Outstanding:</strong> KES {(selectedOrder.totalAmount - selectedOrder.amountPaid).toLocaleString()}
+                          <strong>Remaining Balance:</strong> KES {(selectedOrder.remainingBalance || 0).toLocaleString()}
+                          {selectedOrder.partialPayments && selectedOrder.partialPayments.length > 0 && (
+                            <>
+                              <br />
+                              <strong>Payment History:</strong> {selectedOrder.partialPayments.length} payment{selectedOrder.partialPayments.length > 1 ? 's' : ''} made
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2445,18 +2449,18 @@ export default function OrdersPage() {
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(Number(e.target.value))}
                     min="1"
-                    max={paymentType === 'full' ? (orderForPayment.totalAmount - (orderForPayment.amountPaid || 0)) : undefined}
+                    max={paymentType === 'full' ? (orderForPayment.remainingBalance || orderForPayment.totalAmount) : undefined}
                     className="w-full"
                     placeholder={paymentType === 'full' ? 
-                      `${orderForPayment.totalAmount - (orderForPayment.amountPaid || 0)}` : 
+                      `${orderForPayment.remainingBalance || orderForPayment.totalAmount}` : 
                       'Enter partial payment amount'
                     }
                     disabled={paymentType === 'full'}
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     {paymentType === 'full' 
-                      ? `Full payment: Ksh ${(orderForPayment.totalAmount - (orderForPayment.amountPaid || 0)).toLocaleString()}`
-                      : `Enter any amount up to Ksh ${(orderForPayment.totalAmount - (orderForPayment.amountPaid || 0)).toLocaleString()}`
+                      ? `Full payment: Ksh ${(orderForPayment.remainingBalance || orderForPayment.totalAmount).toLocaleString()}`
+                      : `Enter any amount up to Ksh ${(orderForPayment.remainingBalance || orderForPayment.totalAmount).toLocaleString()}`
                     }
                   </p>
                 </div>
@@ -2543,10 +2547,10 @@ export default function OrdersPage() {
                     <span className="text-sm font-medium text-gray-700">Order Total:</span>
                     <span className="text-sm font-bold text-gray-900">Ksh {orderForManualPayment.totalAmount.toLocaleString()}</span>
                   </div>
-                  {orderForManualPayment.amountPaid && (
+                  {orderForManualPayment.remainingBalance && orderForManualPayment.remainingBalance < orderForManualPayment.totalAmount && (
                     <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-700">Already Paid:</span>
-                      <span className="text-sm font-bold text-green-600">Ksh {orderForManualPayment.amountPaid.toLocaleString()}</span>
+                      <span className="text-sm font-medium text-gray-700">Remaining Balance:</span>
+                      <span className="text-sm font-bold text-orange-600">Ksh {orderForManualPayment.remainingBalance.toLocaleString()}</span>
                     </div>
                   )}
                 </div>

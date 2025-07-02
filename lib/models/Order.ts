@@ -21,6 +21,15 @@ export interface IOrder extends mongoose.Document {
   totalAmount: number;
   pickDropAmount: number;
   discount: number;
+  // Add remaining balance tracking
+  remainingBalance: number;
+  partialPayments: Array<{
+    amount: number;
+    date: Date;
+    mpesaReceiptNumber: string;
+    phoneNumber: string;
+    method: 'mpesa_stk' | 'mpesa_c2b' | 'cash' | 'bank_transfer';
+  }>;
   paymentStatus: 'unpaid' | 'paid' | 'partial' | 'pending' | 'failed';
   laundryStatus: 'to-be-picked' | 'picked' | 'in-progress' | 'ready' | 'delivered';
   status: 'pending' | 'confirmed' | 'in-progress' | 'ready' | 'delivered' | 'cancelled';
@@ -35,6 +44,16 @@ export interface IOrder extends mongoose.Document {
     maxDiscount: number;
     appliedAt: Date;
     lockedIn: boolean;
+  };
+  // Store pending payment data for exact amount matching
+  pendingMpesaPayment?: {
+    checkoutRequestId: string;
+    merchantRequestId: string;
+    amount: number;
+    phoneNumber: string;
+    paymentType: 'full' | 'partial';
+    initiatedAt: Date;
+    status: 'pending' | 'completed' | 'failed';
   };
   // M-Pesa payment fields (top level)
   checkoutRequestId?: string;
@@ -152,6 +171,40 @@ const orderSchema = new mongoose.Schema<IOrder>({
     required: true,
     min: 0,
   },
+  // Add remaining balance tracking
+  remainingBalance: {
+    type: Number,
+    required: true,
+    min: 0,
+    default: function() {
+      return this.totalAmount || 0;
+    }
+  },
+  partialPayments: [{
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    date: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+    mpesaReceiptNumber: {
+      type: String,
+      required: true,
+    },
+    phoneNumber: {
+      type: String,
+      required: true,
+    },
+    method: {
+      type: String,
+      enum: ['mpesa_stk', 'mpesa_c2b', 'cash', 'bank_transfer'],
+      required: true,
+    },
+  }],
   paymentStatus: {
     type: String,
     enum: ['unpaid', 'paid', 'partial', 'pending', 'failed'],
@@ -192,6 +245,26 @@ const orderSchema = new mongoose.Schema<IOrder>({
     lockedIn: {
       type: Boolean,
       default: false
+    }
+  },
+  // Store pending payment data for exact amount matching
+  pendingMpesaPayment: {
+    checkoutRequestId: String,
+    merchantRequestId: String,
+    amount: Number,
+    phoneNumber: String,
+    paymentType: {
+      type: String,
+      enum: ['full', 'partial']
+    },
+    initiatedAt: {
+      type: Date,
+      default: Date.now
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'completed', 'failed'],
+      default: 'pending'
     }
   },
   // M-Pesa payment fields (top level)
@@ -237,6 +310,14 @@ const orderSchema = new mongoose.Schema<IOrder>({
   },
 }, {
   timestamps: true,
+});
+
+// Pre-save middleware to ensure remainingBalance is calculated correctly
+orderSchema.pre('save', function(next) {
+  if (this.isNew && !this.remainingBalance) {
+    this.remainingBalance = this.totalAmount;
+  }
+  next();
 });
 
 export default mongoose.models.Order || mongoose.model<IOrder>('Order', orderSchema); 
