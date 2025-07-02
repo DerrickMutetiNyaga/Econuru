@@ -54,23 +54,39 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Check if payment amount matches order total exactly (strict comparison)
-    const orderTotal = order.totalAmount || 0;
+    // Get current remaining balance or use total amount
+    const currentRemainingBalance = order.remainingBalance || order.totalAmount;
     const amountPaid = transaction.amountPaid || 0;
-    const isExactPayment = amountPaid === orderTotal;
-    const isPartialPayment = amountPaid < orderTotal;
-    const isOverPayment = amountPaid > orderTotal;
     
-    // Only mark as 'paid' if exact amount is received
-    const paymentStatus = isExactPayment ? 'paid' : 'partially_paid';
+    // Calculate new remaining balance
+    const newRemainingBalance = Math.max(0, currentRemainingBalance - amountPaid);
+    const isExactPayment = newRemainingBalance === 0;
+    const isPartialPayment = newRemainingBalance > 0;
+    const isOverPayment = amountPaid > currentRemainingBalance;
+    
+    // Determine payment status
+    const paymentStatus = isExactPayment ? 'paid' : 'partial';
 
     // Determine payment method based on transaction type
     const paymentMethod = transaction.transactionType === 'STK_PUSH' ? 'mpesa_stk' : 'mpesa_c2b';
+
+    // Create payment record for partial payments array
+    const paymentRecord = {
+      amount: amountPaid,
+      date: new Date(),
+      mpesaReceiptNumber: transaction.mpesaReceiptNumber,
+      phoneNumber: transaction.phoneNumber,
+      method: paymentMethod
+    };
 
     // Update the order with payment details
     await Order.findByIdAndUpdate(orderId, {
       paymentStatus: paymentStatus,
       paymentMethod: paymentMethod,
+      remainingBalance: newRemainingBalance,
+      $push: {
+        partialPayments: paymentRecord
+      },
       $set: {
         'c2bPayment': {
           transactionId: transaction.transactionId,
@@ -98,18 +114,18 @@ export async function POST(request: NextRequest) {
     });
 
     const logMessage = isExactPayment 
-      ? `🔗✅ EXACT payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid})`
+      ? `🔗✅ FULL payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid})`
       : isOverPayment
-      ? `🔗💰 OVERPAYMENT transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid} for KES ${orderTotal})`
-      : `🔗⚠️ PARTIAL payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid} of KES ${orderTotal})`;
+      ? `🔗💰 OVERPAYMENT transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid} for remaining KES ${currentRemainingBalance})`
+      : `🔗⚠️ PARTIAL payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid}, remaining: KES ${newRemainingBalance})`;
     
     console.log(logMessage);
 
     const successMessage = isExactPayment
-      ? `Transaction ${transactionId} successfully connected to order ${order.orderNumber} - EXACT payment received`
+      ? `Transaction ${transactionId} successfully connected to order ${order.orderNumber} - Order fully paid`
       : isOverPayment
-      ? `Transaction ${transactionId} connected as overpayment (KES ${amountPaid} for KES ${orderTotal}) to order ${order.orderNumber}`
-      : `Transaction ${transactionId} connected as partial payment (KES ${amountPaid} of KES ${orderTotal}) to order ${order.orderNumber}`;
+      ? `Transaction ${transactionId} connected as overpayment (KES ${amountPaid} for remaining KES ${currentRemainingBalance}) to order ${order.orderNumber}`
+      : `Transaction ${transactionId} connected as partial payment (KES ${amountPaid}) to order ${order.orderNumber}. Remaining balance: KES ${newRemainingBalance}`;
 
     return NextResponse.json({
       success: true,
@@ -118,7 +134,8 @@ export async function POST(request: NextRequest) {
       isPartialPayment: isPartialPayment,
       isOverPayment: isOverPayment,
       amountPaid: amountPaid,
-      orderTotal: orderTotal,
+      remainingBalance: newRemainingBalance,
+      currentRemainingBalance: currentRemainingBalance,
       transaction: {
         id: transaction.transactionId,
         amount: transaction.amountPaid,

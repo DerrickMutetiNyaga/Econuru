@@ -5,32 +5,27 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
-  Smartphone, 
-  Link2, 
-  CheckCircle, 
-  Clock, 
-  RefreshCw, 
+  DollarSign, 
+  RefreshCw,
+  Smartphone,
+  Receipt,
+  Link2,
   Search,
-  DollarSign,
-  AlertTriangle,
-  Eye,
-  Filter
+  Calendar,
+  CheckCircle,
+  XCircle,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 interface MpesaTransaction {
   _id: string;
@@ -40,53 +35,42 @@ interface MpesaTransaction {
   phoneNumber: string;
   amountPaid: number;
   transactionType: string;
-  billRefNumber: string;
   customerName: string;
-  paymentCompletedAt: string;
   isConnectedToOrder: boolean;
-  connectedOrderId?: {
-    _id: string;
-    orderNumber: string;
-    customer: { name: string };
-  };
+  connectedOrderId?: string;
   connectedAt?: string;
   connectedBy?: string;
-  notes: string;
-}
-
-interface PendingOrder {
-  _id: string;
-  orderNumber: string;
-  customer: { name: string };
-  totalAmount: number;
+  notes?: string;
   createdAt: string;
 }
 
-interface Stats {
-  total: number;
-  unconnected: number;
-  connected: number;
+interface Order {
+  _id: string;
+  orderNumber: string;
+  customer: {
+    name: string;
+    phone: string;
+  };
   totalAmount: number;
-  unconnectedAmount: number;
+  remainingBalance?: number;
+  paymentStatus: string;
 }
 
 export default function MpesaTransactionsPage() {
   const { isAdmin, logout, isLoading, token } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+  
   const [transactions, setTransactions] = useState<MpesaTransaction[]>([]);
-  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
-  const [stats, setStats] = useState<Stats>({
-    total: 0,
-    unconnected: 0,
-    connected: 0,
-    totalAmount: 0,
-    unconnectedAmount: 0
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Connection modal state
+  const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<MpesaTransaction | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState('');
   const [connecting, setConnecting] = useState(false);
 
   useEffect(() => {
@@ -97,36 +81,46 @@ export default function MpesaTransactionsPage() {
 
   useEffect(() => {
     if (token) {
-      loadTransactions();
+      loadData();
     }
-  }, [token, filter]);
+  }, [token]);
 
-  const loadTransactions = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/admin/mpesa-transactions?filter=${filter}`, {
+      
+      // Load M-Pesa transactions
+      const transactionsResponse = await fetch('/api/admin/mpesa-transactions', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
       
-      if (response.ok) {
-        const data = await response.json();
-        setTransactions(data.transactions || []);
-        setPendingOrders(data.pendingOrders || []);
-        setStats(data.stats || stats);
+      // Load orders for connection dropdown
+      const ordersResponse = await fetch('/api/orders', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (transactionsResponse.ok && ordersResponse.ok) {
+        const transactionsData = await transactionsResponse.json();
+        const ordersData = await ordersResponse.json();
+        
+        setTransactions(transactionsData.transactions || []);
+        setOrders(ordersData.orders || []);
       } else {
         toast({
-          title: 'Error',
-          description: 'Failed to load M-Pesa transactions',
+          title: 'Error Loading Data',
+          description: 'Failed to load transactions or orders',
           variant: 'destructive',
         });
       }
     } catch (error) {
-      console.error('Error loading M-Pesa transactions:', error);
+      console.error('Error loading data:', error);
       toast({
-        title: 'Error',
-        description: 'Connection error',
+        title: 'Connection Error',
+        description: 'Unable to connect to the server',
         variant: 'destructive',
       });
     } finally {
@@ -134,31 +128,62 @@ export default function MpesaTransactionsPage() {
     }
   };
 
-  const connectToOrder = async (transactionId: string, orderId: string) => {
+  const handleConnectTransaction = (transaction: MpesaTransaction) => {
+    setSelectedTransaction(transaction);
+    setSelectedOrderId('');
+    setConnectionDialogOpen(true);
+  };
+
+  const connectTransactionToOrder = async () => {
+    if (!selectedTransaction || !selectedOrderId) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please select an order to connect',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       setConnecting(true);
+      
       const response = await fetch('/api/admin/mpesa-transactions/connect', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ transactionId, orderId }),
+        body: JSON.stringify({
+          transactionId: selectedTransaction.transactionId,
+          orderId: selectedOrderId,
+        }),
       });
-      
-      if (response.ok) {
-        const data = await response.json();
+
+      const data = await response.json();
+
+      if (data.success) {
         toast({
-          title: 'Success',
+          title: 'Transaction Connected',
           description: data.message,
+          variant: 'default',
         });
-        loadTransactions(); // Reload data
+
+        // Update transaction in local state
+        setTransactions(prevTransactions =>
+          prevTransactions.map(t =>
+            t._id === selectedTransaction._id
+              ? { ...t, isConnectedToOrder: true, connectedOrderId: selectedOrderId }
+              : t
+          )
+        );
+
+        setConnectionDialogOpen(false);
         setSelectedTransaction(null);
+        setSelectedOrderId('');
       } else {
-        const errorData = await response.json();
         toast({
-          title: 'Error',
-          description: errorData.error || 'Failed to connect transaction',
+          title: 'Connection Failed',
+          description: data.error || 'Failed to connect transaction',
           variant: 'destructive',
         });
       }
@@ -166,7 +191,7 @@ export default function MpesaTransactionsPage() {
       console.error('Error connecting transaction:', error);
       toast({
         title: 'Error',
-        description: 'Connection error',
+        description: 'Failed to connect transaction',
         variant: 'destructive',
       });
     } finally {
@@ -176,13 +201,30 @@ export default function MpesaTransactionsPage() {
 
   const filteredTransactions = transactions.filter(transaction => {
     const matchesSearch = 
-      transaction.transactionId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       transaction.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       transaction.phoneNumber.includes(searchTerm) ||
+      transaction.transactionId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       transaction.mpesaReceiptNumber.toLowerCase().includes(searchTerm.toLowerCase());
     
-    return matchesSearch;
+    const matchesStatus = statusFilter === 'all' || 
+      (statusFilter === 'connected' && transaction.isConnectedToOrder) ||
+      (statusFilter === 'unconnected' && !transaction.isConnectedToOrder);
+    
+    return matchesSearch && matchesStatus;
   });
+
+  const getStatusBadge = (transaction: MpesaTransaction) => {
+    if (transaction.isConnectedToOrder) {
+      return <Badge variant="default" className="bg-green-500">Connected</Badge>;
+    } else {
+      return <Badge variant="secondary" className="bg-orange-500 text-white">Unconnected</Badge>;
+    }
+  };
+
+  const getConnectedOrder = (transaction: MpesaTransaction) => {
+    if (!transaction.connectedOrderId) return null;
+    return orders.find(order => order._id === transaction.connectedOrderId);
+  };
 
   if (!isAdmin) return null;
 
@@ -200,84 +242,74 @@ export default function MpesaTransactionsPage() {
             <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
               <Smartphone className="w-5 h-5 text-green-600" />
             </div>
-            M-Pesa Transaction Manager
+            M-Pesa Transactions
           </h1>
-          <p className="text-gray-600 mt-2">View and connect M-Pesa payments to orders</p>
+          <p className="text-gray-600 mt-2">View and manage all M-Pesa transaction records</p>
         </div>
-        <Button onClick={loadTransactions} variant="outline" size="sm" className="gap-2">
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={loadData} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-green-600" />
+              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                <Receipt className="w-4 h-4 text-blue-600" />
+              </div>
               Total Transactions
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.total}</div>
-            <div className="text-sm text-gray-500">All M-Pesa payments</div>
+            <div className="text-2xl font-bold text-blue-600">
+              {transactions.length}
+            </div>
+            <div className="text-sm text-gray-500 mt-1">
+              All M-Pesa transactions
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-blue-600" />
+              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+              </div>
               Connected
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.connected}</div>
-            <div className="text-sm text-gray-500">Linked to orders</div>
+            <div className="text-2xl font-bold text-green-600">
+              {transactions.filter(t => t.isConnectedToOrder).length}
+            </div>
+            <div className="text-sm text-gray-500 mt-1">
+              Linked to orders
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-orange-600" />
+              <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
+                <AlertTriangle className="w-4 h-4 text-orange-600" />
+              </div>
               Unconnected
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{stats.unconnected}</div>
-            <div className="text-sm text-gray-500">Need connection</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-purple-600" />
-              Total Value
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">
-              KES {stats.totalAmount.toLocaleString()}
+            <div className="text-2xl font-bold text-orange-600">
+              {transactions.filter(t => !t.isConnectedToOrder).length}
             </div>
-            <div className="text-sm text-gray-500">All transactions</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-red-600" />
-              Unconnected Value
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              KES {stats.unconnectedAmount.toLocaleString()}
+            <div className="text-sm text-gray-500 mt-1">
+              Need manual connection
             </div>
-            <div className="text-sm text-gray-500">Needs attention</div>
           </CardContent>
         </Card>
       </div>
@@ -286,9 +318,10 @@ export default function MpesaTransactionsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Filter className="w-5 h-5" />
+            <Search className="w-5 h-5" />
             Filter Transactions
           </CardTitle>
+          <CardDescription>Search and filter M-Pesa transaction records</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4">
@@ -296,263 +329,229 @@ export default function MpesaTransactionsPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search by transaction ID, customer name, or phone..."
+                  placeholder="Search by name, phone, transaction ID, or receipt number..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
             </div>
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filter by status" />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Connection Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Transactions</SelectItem>
-                <SelectItem value="unconnected">Unconnected</SelectItem>
                 <SelectItem value="connected">Connected</SelectItem>
+                <SelectItem value="unconnected">Unconnected</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Transactions List */}
+      {/* Transactions Table */}
       <Card>
         <CardHeader>
-          <CardTitle>M-Pesa Transactions ({filteredTransactions.length})</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Receipt className="w-5 h-5" />
+            M-Pesa Transactions ({filteredTransactions.length})
+          </CardTitle>
           <CardDescription>
-            Manage M-Pesa payments and connect them to orders
+            All M-Pesa transaction records with order connection options
           </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-32 space-y-4">
-              <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+            <div className="flex flex-col items-center justify-center h-64 space-y-4">
+              <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
               <p className="text-gray-500">Loading transactions...</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {filteredTransactions.map((transaction) => (
-                <div key={transaction._id} className="border rounded-lg p-4 bg-gray-50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <Badge 
-                        variant={transaction.isConnectedToOrder ? "default" : "destructive"}
-                        className="gap-1"
-                      >
-                        {transaction.isConnectedToOrder ? (
-                          <>
-                            <CheckCircle className="w-3 h-3" />
-                            Connected
-                          </>
-                        ) : (
-                          <>
-                            <AlertTriangle className="w-3 h-3" />
-                            Unconnected
-                          </>
-                        )}
-                      </Badge>
-                      <code className="text-sm bg-gray-200 px-2 py-1 rounded">
-                        {transaction.transactionId}
-                      </code>
-                    </div>
-                                          <div className="text-right">
-                        <div className="font-bold text-lg">
-                          KES {transaction.amountPaid.toLocaleString()}
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client Name</TableHead>
+                    <TableHead>Client No</TableHead>
+                    <TableHead>Amount Paid</TableHead>
+                    <TableHead>Transaction Id</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Order Number</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="h-32 text-center">
+                        <div className="flex flex-col items-center space-y-2">
+                          <Receipt className="w-8 h-8 text-gray-400" />
+                          <p className="text-gray-500">No transactions found</p>
+                          <p className="text-sm text-gray-400">
+                            Transactions will appear here when customers make M-Pesa payments
+                          </p>
                         </div>
-                        {transaction.connectedOrderId && (
-                          <div className="text-xs text-blue-600">
-                            Order: {transaction.connectedOrderId.orderNumber}
-                          </div>
-                        )}
-                        <div className="text-sm text-gray-500">
-                          {format(new Date(transaction.transactionDate), 'MMM dd, HH:mm')}
-                        </div>
-                      </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm mb-3">
-                    <div>
-                      <span className="font-medium text-gray-600">Transaction ID:</span>
-                      <div className="font-mono text-blue-700 font-bold">
-                        {transaction.transactionId}
-                      </div>
-                      <div className="text-xs text-gray-500">M-Pesa Receipt</div>
-                    </div>
-
-                    <div>
-                      <span className="font-medium text-gray-600">Customer:</span>
-                      <div className="font-semibold">{transaction.customerName}</div>
-                      <div className="text-gray-500 font-mono">{transaction.phoneNumber}</div>
-                    </div>
-
-                    <div>
-                      <span className="font-medium text-gray-600">Order Number:</span>
-                      <div>
-                        {transaction.isConnectedToOrder ? (
-                          <div className="flex flex-col">
-                            <span className="font-bold text-blue-600">
-                              {transaction.connectedOrderId?.orderNumber}
-                            </span>
-                            <span className="text-xs text-green-600">Connected</span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col">
-                            <span className="text-orange-600 font-medium">Not Connected</span>
-                            <span className="text-xs text-gray-500">Needs connection</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="font-medium text-gray-600">Amount Paid:</span>
-                      <div className="font-bold text-green-700 text-lg">
-                        KES {transaction.amountPaid.toLocaleString()}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {format(new Date(transaction.transactionDate), 'MMM dd, HH:mm')}
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-end items-center">
-                      {!transaction.isConnectedToOrder ? (
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button 
-                              size="sm" 
-                              onClick={() => setSelectedTransaction(transaction)}
-                              className="gap-2 bg-orange-600 hover:bg-orange-700"
-                            >
-                              <Link2 className="w-4 h-4" />
-                              Connect to Order
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle>Connect M-Pesa Transaction</DialogTitle>
-                              <DialogDescription>
-                                Connect transaction {transaction.transactionId} (KES {transaction.amountPaid.toLocaleString()}) to an order
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="bg-blue-50 p-4 rounded-lg">
-                                <h4 className="font-semibold mb-2 text-blue-800">Transaction Details:</h4>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                  <div>
-                                    <strong>Transaction ID:</strong> {transaction.transactionId}
-                                  </div>
-                                  <div>
-                                    <strong>Amount Paid:</strong> KES {transaction.amountPaid.toLocaleString()}
-                                  </div>
-                                  <div>
-                                    <strong>Customer Name:</strong> {transaction.customerName}
-                                  </div>
-                                  <div>
-                                    <strong>Phone Number:</strong> {transaction.phoneNumber}
-                                  </div>
-                                  <div>
-                                    <strong>Payment Date:</strong> {format(new Date(transaction.transactionDate), 'MMM dd, yyyy HH:mm')}
-                                  </div>
-                                  <div>
-                                    <strong>Payment Type:</strong> {transaction.transactionType}
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div>
-                                <h4 className="font-medium mb-2">Available Orders for Connection:</h4>
-                                <div className="space-y-2 max-h-64 overflow-y-auto">
-                                  {pendingOrders.map((order) => {
-                                    const isExactMatch = order.totalAmount === transaction.amountPaid;
-                                    const isPartialMatch = transaction.amountPaid < order.totalAmount;
-                                    
-                                    return (
-                                      <div 
-                                        key={order._id} 
-                                        className={`flex items-center justify-between p-3 border rounded ${
-                                          isExactMatch ? 'bg-green-50 border-green-200' : 
-                                          isPartialMatch ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50'
-                                        }`}
-                                      >
-                                        <div>
-                                          <div className="font-medium flex items-center gap-2">
-                                            {order.orderNumber}
-                                            {isExactMatch && (
-                                              <Badge variant="default" className="bg-green-600 text-xs">
-                                                Exact Match
-                                              </Badge>
-                                            )}
-                                            {isPartialMatch && (
-                                              <Badge variant="secondary" className="bg-yellow-600 text-white text-xs">
-                                                Partial Payment
-                                              </Badge>
-                                            )}
-                                          </div>
-                                          <div className="text-sm text-gray-600">
-                                            {order.customer.name} - KES {order.totalAmount.toLocaleString()}
-                                          </div>
-                                          <div className="text-xs text-gray-500">
-                                            {format(new Date(order.createdAt), 'MMM dd, yyyy')}
-                                          </div>
-                                          {isPartialMatch && (
-                                            <div className="text-xs text-yellow-700 mt-1">
-                                              Shortfall: KES {(order.totalAmount - transaction.amountPaid).toLocaleString()}
-                                            </div>
-                                          )}
-                                        </div>
-                                        <Button
-                                          size="sm"
-                                          onClick={() => connectToOrder(transaction.transactionId, order._id)}
-                                          disabled={connecting}
-                                          className="gap-2"
-                                          variant={isExactMatch ? "default" : isPartialMatch ? "secondary" : "outline"}
-                                        >
-                                          {connecting ? (
-                                            <RefreshCw className="w-4 h-4 animate-spin" />
-                                          ) : (
-                                            <Link2 className="w-4 h-4" />
-                                          )}
-                                          Connect
-                                        </Button>
-                                      </div>
-                                    );
-                                  })}
-                                  {pendingOrders.length === 0 && (
-                                    <p className="text-gray-500 text-center py-4">
-                                      No pending orders found
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredTransactions.map((transaction) => {
+                      const connectedOrder = getConnectedOrder(transaction);
+                      return (
+                        <TableRow key={transaction._id}>
+                          <TableCell className="font-medium">
+                            {transaction.customerName}
+                          </TableCell>
+                          <TableCell>{transaction.phoneNumber}</TableCell>
+                          <TableCell>
+                            <div className="font-medium text-green-600">
+                              KES {transaction.amountPaid.toLocaleString()}
                             </div>
-                          </DialogContent>
-                        </Dialog>
-                      ) : (
-                        <Badge variant="default" className="bg-green-600">
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          Connected
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {filteredTransactions.length === 0 && (
-                <div className="text-center py-8">
-                  <Smartphone className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500">No M-Pesa transactions found</p>
-                  <p className="text-sm text-gray-400">
-                    Transactions will appear here when customers pay to till number 7092156
-                  </p>
-                </div>
-              )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-mono text-sm">
+                              {transaction.transactionId}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {format(new Date(transaction.transactionDate), 'MMM dd, yyyy HH:mm')}
+                          </TableCell>
+                          <TableCell>
+                            {connectedOrder ? (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-blue-600">
+                                  {connectedOrder.orderNumber}
+                                </span>
+                                {connectedOrder.paymentStatus === 'paid' && (
+                                  <CheckCircle className="w-4 h-4 text-green-500" />
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">Not connected</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {getStatusBadge(transaction)}
+                          </TableCell>
+                          <TableCell>
+                            {!transaction.isConnectedToOrder && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleConnectTransaction(transaction)}
+                                className="gap-2"
+                              >
+                                <Link2 className="w-4 h-4" />
+                                Connect
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Connection Dialog */}
+      <Dialog open={connectionDialogOpen} onOpenChange={setConnectionDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-blue-600" />
+              Connect Transaction to Order
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Select an order to connect this M-Pesa transaction to
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedTransaction && (
+            <div className="space-y-4">
+              {/* Transaction Details */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Customer:</span>
+                    <span className="text-sm font-bold text-gray-900">{selectedTransaction.customerName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Phone:</span>
+                    <span className="text-sm font-bold text-gray-900">{selectedTransaction.phoneNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Amount:</span>
+                    <span className="text-sm font-bold text-green-600">KES {selectedTransaction.amountPaid.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Transaction ID:</span>
+                    <span className="text-sm font-mono text-gray-900">{selectedTransaction.transactionId}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Selection */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Select Order
+                </label>
+                <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Choose an order..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orders
+                      .filter(order => order.paymentStatus !== 'paid')
+                      .map((order) => (
+                        <SelectItem key={order._id} value={order._id}>
+                          {order.orderNumber} - {order.customer.name} - KES {(order.remainingBalance || order.totalAmount).toLocaleString()}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">
+                  Only showing orders that are not fully paid
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setConnectionDialogOpen(false);
+                setSelectedTransaction(null);
+                setSelectedOrderId('');
+              }}
+              disabled={connecting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={connectTransactionToOrder}
+              disabled={connecting || !selectedOrderId}
+              className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+            >
+              {connecting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Link2 className="w-4 h-4" />
+                  Connect Transaction
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 } 

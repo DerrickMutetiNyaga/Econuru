@@ -27,6 +27,7 @@ import {
   Image,
   Folder,
   Clock,
+  Smartphone,
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -100,6 +101,7 @@ function AdminLayoutContent({
     BarChart,
     DollarSign,
     Clock,
+    Smartphone,
     UserCog: Users,
     Receipt: DollarSign,
     Image: ImageIcon,

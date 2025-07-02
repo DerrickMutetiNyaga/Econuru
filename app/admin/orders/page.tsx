@@ -404,13 +404,12 @@ export default function OrdersPage() {
   // Handler for payment type change
   const handlePaymentTypeChange = (type: 'full' | 'partial') => {
     setPaymentType(type);
-    if (orderForPayment) {
-      if (type === 'full') {
-        setPaymentAmount(orderForPayment.remainingBalance || orderForPayment.totalAmount);
-      } else {
-        // For partial payment, allow user to enter any amount
-        setPaymentAmount(0);
-      }
+    if (type === 'full' && orderForPayment) {
+      // For full payment, set amount to remaining balance or total amount
+      setPaymentAmount(orderForPayment.remainingBalance || orderForPayment.totalAmount);
+    } else {
+      // For partial payment, clear the amount so user can enter custom amount
+      setPaymentAmount(0);
     }
   };
 
@@ -446,7 +445,7 @@ export default function OrdersPage() {
           orderId: orderForPayment._id,
           phoneNumber: paymentPhone,
           amount: paymentAmount,
-          paymentType: paymentType,
+          paymentType: 'full', // Force full payment for STK push
         }),
       });
 
@@ -472,7 +471,6 @@ export default function OrdersPage() {
         setOrderForPayment(null);
         setPaymentPhone('');
         setPaymentAmount(0);
-        setPaymentType('full');
 
         // Start polling for payment status
         pollPaymentStatus(data.checkoutRequestId);
@@ -2421,27 +2419,6 @@ export default function OrdersPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Payment Type
-                  </label>
-                  <Select value={paymentType} onValueChange={handlePaymentTypeChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select payment type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="full">Full Payment</SelectItem>
-                      <SelectItem value="partial">Partial Payment</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {paymentType === 'full' 
-                      ? 'Will check if transaction amount equals full order amount' 
-                      : 'Will accept any payment amount as partial payment'
-                    }
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Payment Amount (Ksh)
                   </label>
                   <Input
@@ -2449,19 +2426,16 @@ export default function OrdersPage() {
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(Number(e.target.value))}
                     min="1"
-                    max={paymentType === 'full' ? (orderForPayment.remainingBalance || orderForPayment.totalAmount) : undefined}
-                    className="w-full"
-                    placeholder={paymentType === 'full' ? 
-                      `${orderForPayment.remainingBalance || orderForPayment.totalAmount}` : 
-                      'Enter partial payment amount'
-                    }
-                    disabled={paymentType === 'full'}
+                    max={orderForPayment.remainingBalance || orderForPayment.totalAmount}
+                    className="w-full bg-gray-50"
+                    placeholder={`${orderForPayment.remainingBalance || orderForPayment.totalAmount}`}
+                    disabled={true}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    {paymentType === 'full' 
-                      ? `Full payment: Ksh ${(orderForPayment.remainingBalance || orderForPayment.totalAmount).toLocaleString()}`
-                      : `Enter any amount up to Ksh ${(orderForPayment.remainingBalance || orderForPayment.totalAmount).toLocaleString()}`
-                    }
+                    STK Push only supports full payment: Ksh {(orderForPayment.remainingBalance || orderForPayment.totalAmount).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    For partial payments, customer should pay manually and you can connect it in M-Pesa Transactions page.
                   </p>
                 </div>
               </div>
@@ -2490,7 +2464,6 @@ export default function OrdersPage() {
                 setOrderForPayment(null);
                 setPaymentPhone('');
                 setPaymentAmount(0);
-                setPaymentType('full');
               }}
               disabled={initiatingPayment}
             >
