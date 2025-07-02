@@ -142,6 +142,9 @@ export default function OrdersPage() {
   const [searchingPayments, setSearchingPayments] = useState(false);
   const [multipleTransactions, setMultipleTransactions] = useState<any[]>([]);
   const [multipleTransactionsDialogOpen, setMultipleTransactionsDialogOpen] = useState(false);
+  
+  // Pending confirmations
+  const [pendingConfirmationsCount, setPendingConfirmationsCount] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -176,9 +179,28 @@ export default function OrdersPage() {
     }
   };
 
+  const fetchPendingConfirmationsCount = async () => {
+    try {
+      const response = await fetch('/api/admin/payments/pending', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const totalPending = (data.pendingTransactions?.length || 0) + (data.unmatchedTransactions?.length || 0);
+        setPendingConfirmationsCount(totalPending);
+      }
+    } catch (error) {
+      console.error('Error fetching pending confirmations count:', error);
+    }
+  };
+
   useEffect(() => {
     if (token) {
       fetchOrders();
+      fetchPendingConfirmationsCount();
     }
   }, [token]);
 
@@ -1237,6 +1259,35 @@ export default function OrdersPage() {
           </Button>
         </div>
       </div>
+
+      {/* Pending Confirmations Banner */}
+      {pendingConfirmationsCount > 0 && (
+        <Card className="border-l-4 border-l-orange-500 bg-orange-50 border-orange-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-orange-900">
+                    {pendingConfirmationsCount} Payment{pendingConfirmationsCount !== 1 ? 's' : ''} Awaiting Confirmation
+                  </h3>
+                  <p className="text-sm text-orange-700">
+                    M-Pesa transactions received but require admin verification before linking to orders
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => router.push('/admin/payments/pending')}
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                Review Now
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card className="border-0 shadow-lg bg-gradient-to-r from-white to-gray-50">

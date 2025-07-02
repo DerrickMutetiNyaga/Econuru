@@ -64,6 +64,33 @@ const MpesaTransactionSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Confirmation system for manual verification
+  confirmationStatus: {
+    type: String,
+    enum: ['pending', 'confirmed', 'rejected', 'auto_matched'],
+    default: 'pending'
+  },
+  pendingOrderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order',
+    default: null
+  },
+  confirmedCustomerName: {
+    type: String,
+    default: ''
+  },
+  confirmedBy: {
+    type: String,
+    default: null
+  },
+  confirmationNotes: {
+    type: String,
+    default: ''
+  },
+  confirmedAt: {
+    type: Date,
+    default: null
+  },
   // Metadata
   notes: {
     type: String,
@@ -90,6 +117,8 @@ MpesaTransactionSchema.index({ transactionId: 1 });
 MpesaTransactionSchema.index({ mpesaReceiptNumber: 1 });
 MpesaTransactionSchema.index({ phoneNumber: 1 });
 MpesaTransactionSchema.index({ isConnectedToOrder: 1 });
+MpesaTransactionSchema.index({ confirmationStatus: 1 });
+MpesaTransactionSchema.index({ pendingOrderId: 1 });
 MpesaTransactionSchema.index({ transactionDate: -1 });
 
 export default mongoose.models.MpesaTransaction || mongoose.model('MpesaTransaction', MpesaTransactionSchema); 

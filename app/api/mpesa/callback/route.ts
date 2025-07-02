@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
 import MpesaTransaction from '@/lib/models/MpesaTransaction';
+import PaymentAuditLog from '@/lib/models/PaymentAuditLog';
 
 export async function POST(request: NextRequest) {
   try {
@@ -96,93 +97,95 @@ export async function POST(request: NextRequest) {
       console.log(`💰 Payment Analysis: Type=${paymentType}, Requested=${requestedAmount}, Paid=${amountPaid}, OrderTotal=${orderTotal}`);
 
       if (isRequestedAmountPaid) {
-        // REQUESTED AMOUNT PAID: Auto-connect and determine payment status based on payment type
+        // REQUESTED AMOUNT PAID: Create pending transaction for manual confirmation
         try {
-          let paymentStatus: string;
-          
-          if (paymentType === 'full') {
-            // For full payment, check if the amount equals the full order amount
-            paymentStatus = isFullOrderPayment ? 'paid' : 'partial';
-          } else {
-            // For partial payment, always mark as partial (unless it happens to equal full amount)
-            paymentStatus = isFullOrderPayment ? 'paid' : 'partial';
+          // Check if this transaction already exists to prevent duplicates
+          const existingTransaction = await MpesaTransaction.findOne({
+            mpesaReceiptNumber: mpesaReceiptNumber
+          });
+
+          if (existingTransaction) {
+            console.log(`⚠️ Transaction ${mpesaReceiptNumber} already exists, skipping duplicate`);
+            return NextResponse.json({ 
+              success: true, 
+              message: 'Duplicate transaction ignored' 
+            });
           }
-          
+
           const mpesaTransaction = new MpesaTransaction({
             transactionId: mpesaReceiptNumber,
             mpesaReceiptNumber: mpesaReceiptNumber,
             transactionDate: transactionDateObj || new Date(),
-            phoneNumber: phoneNumber || 'Unknown', // Save exactly as received from Safaricom
+            phoneNumber: phoneNumber || 'Unknown',
             amountPaid: amountPaid,
             transactionType: 'STK_PUSH',
             billRefNumber: order.orderNumber,
             customerName: order.customer?.name || 'STK Push Customer',
             paymentCompletedAt: new Date(),
-            isConnectedToOrder: true,
-            connectedOrderId: order._id,
-            connectedAt: new Date(),
-            connectedBy: 'system_auto_match',
-            notes: `STK Push payment for order ${order.orderNumber}. ${
-              isFullOrderPayment ? `Full payment received (KES ${amountPaid})` :
-              isOverPayment ? `Overpayment received (KES ${amountPaid} for KES ${orderTotal} order)` :
-              `Partial payment received (KES ${amountPaid} of KES ${orderTotal} order total)`
-            }`
+            // Pending confirmation fields
+            confirmationStatus: 'pending',
+            pendingOrderId: order._id,
+            isConnectedToOrder: false, // Not connected until confirmed
+            notes: `STK Push payment pending confirmation for order ${order.orderNumber}. Expected: KES ${requestedAmount}, Received: KES ${amountPaid}. Payment type: ${paymentType}.`
           });
 
           await mpesaTransaction.save();
 
-          // Update order with payment details and calculated status
+          // Update order with basic payment info but keep as pending
           await Order.findByIdAndUpdate(order._id, {
-            paymentStatus: paymentStatus,
+            paymentStatus: 'pending',
             paymentMethod: 'mpesa_stk',
-            mpesaReceiptNumber: mpesaReceiptNumber,
-            transactionDate: transactionDateObj,
-            phoneNumber: phoneNumber,
-            amountPaid: amountPaid,
             resultCode: resultCode,
             resultDescription: resultDesc,
-            paymentCompletedAt: new Date(),
             $set: {
-              'mpesaPayment.mpesaReceiptNumber': mpesaReceiptNumber,
-              'mpesaPayment.transactionDate': transactionDateObj,
-              'mpesaPayment.phoneNumber': phoneNumber,
-              'mpesaPayment.amountPaid': amountPaid,
+              'mpesaPayment.checkoutRequestId': checkoutRequestId,
               'mpesaPayment.resultCode': resultCode,
               'mpesaPayment.resultDescription': resultDesc,
               'mpesaPayment.paymentCompletedAt': new Date()
             }
           });
 
-          if (isFullOrderPayment) {
-            console.log(`✅ FULL payment received for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid}) - Order marked as PAID`);
-          } else if (isOverPayment) {
-            console.log(`💰 OVERPAYMENT received for order ${order.orderNumber}: KES ${amountPaid} (expected KES ${orderTotal}) - Receipt: ${mpesaReceiptNumber} - Order marked as PAID`);
-          } else {
-            console.log(`⚠️ PARTIAL payment received for order ${order.orderNumber}: KES ${amountPaid} of KES ${orderTotal} (Receipt: ${mpesaReceiptNumber}) - Order marked as PARTIALLY PAID`);
-          }
+          console.log(`🟡 STK Push payment PENDING CONFIRMATION for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid}) - Requires admin verification`);
+          
         } catch (transactionError) {
-          console.error('Error storing STK Push transaction:', transactionError);
+          console.error('Error storing pending STK Push transaction:', transactionError);
         }
               } else {
-        // PAYMENT AMOUNT MISMATCH: Create standalone transaction for manual review
+        // PAYMENT AMOUNT MISMATCH: Create unmatched transaction for manual review
         try {
+          // Check if this transaction already exists to prevent duplicates
+          const existingTransaction = await MpesaTransaction.findOne({
+            mpesaReceiptNumber: mpesaReceiptNumber
+          });
+
+          if (existingTransaction) {
+            console.log(`⚠️ Transaction ${mpesaReceiptNumber} already exists, skipping duplicate`);
+            return NextResponse.json({ 
+              success: true, 
+              message: 'Duplicate transaction ignored' 
+            });
+          }
+
           const mpesaTransaction = new MpesaTransaction({
             transactionId: mpesaReceiptNumber,
             mpesaReceiptNumber: mpesaReceiptNumber,
             transactionDate: transactionDateObj || new Date(),
-            phoneNumber: phoneNumber || 'Unknown', // Save exactly as received from Safaricom
+            phoneNumber: phoneNumber || 'Unknown',
             amountPaid: amountPaid,
             transactionType: 'STK_PUSH',
             billRefNumber: order.orderNumber,
             customerName: order.customer?.name || 'STK Push Customer',
             paymentCompletedAt: new Date(),
-            isConnectedToOrder: false, // NOT connected - requires manual connection
-            notes: `STK Push payment mismatch for order ${order.orderNumber}. Requested: KES ${requestedAmount}, Paid: KES ${amountPaid}, Order Total: KES ${orderTotal}. Requires manual connection via admin dashboard.`
+            // Unmatched transaction - no pending order connection
+            confirmationStatus: 'pending',
+            pendingOrderId: null, // No direct match
+            isConnectedToOrder: false,
+            notes: `STK Push payment AMOUNT MISMATCH for order ${order.orderNumber}. Expected: KES ${requestedAmount}, Received: KES ${amountPaid}, Order Total: KES ${orderTotal}. Requires manual connection.`
           });
 
           await mpesaTransaction.save();
 
-          // Update order basic payment info but KEEP as unpaid
+          // Update order basic payment info but keep as unpaid
           await Order.findByIdAndUpdate(order._id, {
             resultCode: resultCode,
             resultDescription: resultDesc,
@@ -193,10 +196,10 @@ export async function POST(request: NextRequest) {
             }
           });
 
-          console.log(`🔍 STK Push AMOUNT MISMATCH for order ${order.orderNumber}: Requested KES ${requestedAmount}, Paid KES ${amountPaid} - Receipt: ${mpesaReceiptNumber}`);
-          console.log(`🔗 Transaction created as standalone. Order remains UNPAID until manual connection via admin dashboard.`);
+          console.log(`🔴 STK Push AMOUNT MISMATCH for order ${order.orderNumber}: Expected KES ${requestedAmount}, Received KES ${amountPaid} - Receipt: ${mpesaReceiptNumber}`);
+          console.log(`🔗 Transaction created as unmatched. Requires manual admin connection.`);
         } catch (transactionError) {
-          console.error('Error storing standalone STK Push transaction:', transactionError);
+          console.error('Error storing unmatched STK Push transaction:', transactionError);
         }
       }
 
