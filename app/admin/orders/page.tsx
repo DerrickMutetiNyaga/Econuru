@@ -1285,7 +1285,7 @@ export default function OrdersPage() {
                 </div>
               </div>
               <Button
-                onClick={() => router.push('/admin/payments/pending')}
+                onClick={() => router.push('/admin/mpesa-transactions')}
                 className="bg-orange-600 hover:bg-orange-700 text-white"
               >
                 Review Now

@@ -15,7 +15,7 @@ export default function PaymentsRedirectPage() {
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
         <p className="text-gray-600">Redirecting to M-Pesa Transactions...</p>
-      </div>
-    </div>
+              </div>
+            </div>
   );
 } 
