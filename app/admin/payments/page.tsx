@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import PaymentNavbar from '@/components/PaymentNavbar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
@@ -19,15 +18,20 @@ import {
   CalendarIcon,
   SearchIcon,
   Users,
-  Download
+  Download,
+  Smartphone,
+  Receipt,
+  Eye,
+  Filter
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { motion } from 'framer-motion';
 
 interface Payment {
   _id: string;
@@ -57,6 +61,7 @@ interface PaymentStats {
 
 export default function PaymentsPage() {
   const { isAdmin, logout, isLoading, token } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [stats, setStats] = useState<PaymentStats>({
@@ -98,11 +103,19 @@ export default function PaymentsPage() {
         setPayments(data.payments || []);
         setStats(data.stats || stats);
       } else {
-        toast.error('Failed to load payments');
+        toast({
+          title: 'Error',
+          description: 'Failed to load payments',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('Error loading payments:', error);
-      toast.error('Error loading payments');
+      toast({
+        title: 'Error',
+        description: 'Error loading payments',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -125,13 +138,24 @@ export default function PaymentsPage() {
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
-        toast.success('Payments exported successfully');
+        toast({
+          title: 'Success',
+          description: 'Payments exported successfully',
+        });
       } else {
-        toast.error('Failed to export payments');
+        toast({
+          title: 'Error',
+          description: 'Failed to export payments',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('Error exporting payments:', error);
-      toast.error('Error exporting payments');
+      toast({
+        title: 'Error',
+        description: 'Error exporting payments',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -164,11 +188,26 @@ export default function PaymentsPage() {
   const getPaymentMethodBadge = (method: string) => {
     switch (method) {
       case 'mpesa_stk':
-        return <Badge variant="default" className="bg-green-600">M-Pesa STK</Badge>;
+        return (
+          <Badge variant="default" className="bg-green-600 hover:bg-green-700 gap-1">
+            <Smartphone className="w-3 h-3" />
+            M-Pesa STK
+          </Badge>
+        );
       case 'mpesa_c2b':
-        return <Badge variant="default" className="bg-blue-600">M-Pesa C2B</Badge>;
+        return (
+          <Badge variant="default" className="bg-blue-600 hover:bg-blue-700 gap-1">
+            <CreditCard className="w-3 h-3" />
+            M-Pesa C2B
+          </Badge>
+        );
       case 'cash':
-        return <Badge variant="outline">Cash</Badge>;
+        return (
+          <Badge variant="outline" className="gap-1">
+            <DollarSign className="w-3 h-3" />
+            Cash
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{method}</Badge>;
     }
@@ -177,40 +216,49 @@ export default function PaymentsPage() {
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <PaymentNavbar />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Payment Dashboard</h1>
-            <p className="text-gray-600 mt-2">Monitor and manage M-Pesa payments</p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={exportPayments} variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Export CSV
-            </Button>
-            <Button onClick={loadPayments} variant="outline" size="sm">
-            <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
-          </Button>
-          </div>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-green-600" />
+            </div>
+            M-Pesa Payments
+          </h1>
+          <p className="text-gray-600 mt-2">Monitor and manage all M-Pesa transactions</p>
         </div>
+        <div className="flex gap-2">
+          <Button onClick={exportPayments} variant="outline" size="sm" className="gap-2">
+            <Download className="w-4 h-4" />
+            Export CSV
+          </Button>
+          <Button onClick={loadPayments} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
+        </div>
+      </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4" />
+                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                      <DollarSign className="w-4 h-4 text-green-600" />
+                    </div>
                     Total Revenue
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">
-                Ksh {stats.totalAmount.toLocaleString()}
+                  <div className="text-2xl font-bold text-green-600">
+                    KES {stats.totalAmount.toLocaleString()}
                   </div>
                   <div className="flex items-center gap-1 mt-1">
                     <TrendingUp className="w-4 h-4 text-green-600" />
@@ -223,17 +271,19 @@ export default function PaymentsPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                      <CheckCircle className="w-4 h-4 text-blue-600" />
+                    </div>
                     Successful Payments
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">
-                {stats.paidOrders}
+                  <div className="text-2xl font-bold text-blue-600">
+                    {stats.paidOrders}
                   </div>
                   <div className="text-sm text-gray-500 mt-1">
                     {stats.totalPayments > 0 ? 
-                  `${((stats.paidOrders / stats.totalPayments) * 100).toFixed(1)}% success rate` :
+                      `${((stats.paidOrders / stats.totalPayments) * 100).toFixed(1)}% success rate` :
                       'No payments yet'
                     }
                   </div>
@@ -243,13 +293,15 @@ export default function PaymentsPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
+                    <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
+                      <Clock className="w-4 h-4 text-yellow-600" />
+                    </div>
                     Pending Payments
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-yellow-600">
-                {stats.pendingOrders}
+                    {stats.pendingOrders}
                   </div>
                   <div className="text-sm text-gray-500 mt-1">
                     Awaiting customer action
@@ -260,34 +312,45 @@ export default function PaymentsPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <CalendarIcon className="w-4 h-4" />
-                Today's Revenue
+                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                      <CalendarIcon className="w-4 h-4 text-purple-600" />
+                    </div>
+                    Today's Revenue
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                Ksh {stats.todayAmount.toLocaleString()}
+                  <div className="text-2xl font-bold text-purple-600">
+                    KES {stats.todayAmount.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {stats.todayPayments} transactions today
                   </div>
                 </CardContent>
               </Card>
-            </div>
+      </div>
 
-        {/* Filters */}
-              <Card>
-          <CardHeader>
-            <CardTitle>Filter Payments</CardTitle>
-            <CardDescription>Search and filter payment records</CardDescription>
-                </CardHeader>
-                <CardContent>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="w-5 h-5" />
+            Filter Payments
+          </CardTitle>
+          <CardDescription>Search and filter payment records</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Search by order number, customer name, phone, or receipt number..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full"
+                  className="pl-10"
                 />
-                  </div>
+              </div>
+            </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Payment Status" />
@@ -310,25 +373,29 @@ export default function PaymentsPage() {
                   <SelectItem value="cash">Cash</SelectItem>
                 </SelectContent>
               </Select>
-                  </div>
-                </CardContent>
-              </Card>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Payments Table */}
-            <Card>
-              <CardHeader>
-            <CardTitle>Payment Records ({filteredPayments.length})</CardTitle>
-            <CardDescription>
-              All payment transactions and their details
-            </CardDescription>
-              </CardHeader>
-              <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <RefreshCw className="w-8 h-8 animate-spin" />
-                  </div>
-                ) : (
-              <div className="rounded-md border">
+      {/* Payments Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Receipt className="w-5 h-5" />
+            Payment Records ({filteredPayments.length})
+          </CardTitle>
+          <CardDescription>
+            All M-Pesa payment transactions and their details
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-64 space-y-4">
+              <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
+              <p className="text-gray-500">Loading payment records...</p>
+            </div>
+          ) : (
+            <div className="rounded-md border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -345,8 +412,12 @@ export default function PaymentsPage() {
                   <TableBody>
                     {filteredPayments.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center">
-                          No payments found.
+                        <TableCell colSpan={8} className="h-32 text-center">
+                          <div className="flex flex-col items-center space-y-2">
+                            <AlertTriangle className="w-8 h-8 text-gray-400" />
+                            <p className="text-gray-500">No payment records found</p>
+                            <p className="text-sm text-gray-400">Try adjusting your filters or search terms</p>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -386,9 +457,20 @@ export default function PaymentsPage() {
                           </TableCell>
                           <TableCell>
                             {payment.mpesaReceiptNumber ? (
-                              <code className="text-xs bg-muted px-1 rounded">
-                                {payment.mpesaReceiptNumber}
-                              </code>
+                              <div className="flex items-center gap-2">
+                                <code className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded font-mono">
+                                  {payment.mpesaReceiptNumber}
+                                </code>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => navigator.clipboard.writeText(payment.mpesaReceiptNumber || '')}
+                                  title="Copy receipt number"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                </Button>
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
@@ -406,11 +488,10 @@ export default function PaymentsPage() {
                     )}
                   </TableBody>
                 </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-      </div>
-    </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+    </motion.div>
   );
 } 

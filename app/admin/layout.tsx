@@ -97,6 +97,7 @@ function AdminLayoutContent({
     Settings,
     Folder: ImageIcon,
     BarChart,
+    DollarSign,
     UserCog: Users,
     Receipt: DollarSign,
     Image: ImageIcon,
