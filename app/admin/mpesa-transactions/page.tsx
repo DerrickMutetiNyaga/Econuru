@@ -96,7 +96,7 @@ export default function MpesaTransactionsPage() {
         },
       });
       
-      // Load orders for connection dropdown
+      // Load orders for connection dropdown and display
       const ordersResponse = await fetch('/api/orders', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -216,15 +216,21 @@ export default function MpesaTransactionsPage() {
       transaction.mpesaReceiptNumber.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || 
-      (statusFilter === 'connected' && transaction.isConnectedToOrder) ||
-      (statusFilter === 'unconnected' && !transaction.isConnectedToOrder);
+      (statusFilter === 'connected' && transaction.isConnectedToOrder && getConnectedOrder(transaction)) ||
+      (statusFilter === 'unconnected' && !transaction.isConnectedToOrder) ||
+      (statusFilter === 'missing-order' && transaction.isConnectedToOrder && !getConnectedOrder(transaction));
     
     return matchesSearch && matchesStatus;
   });
 
   const getStatusBadge = (transaction: MpesaTransaction) => {
     if (transaction.isConnectedToOrder) {
-      return <Badge variant="default" className="bg-green-500">Connected</Badge>;
+      const connectedOrder = getConnectedOrder(transaction);
+      if (connectedOrder) {
+        return <Badge variant="default" className="bg-green-500">Connected</Badge>;
+      } else {
+        return <Badge variant="destructive" className="bg-red-500">Missing Order</Badge>;
+      }
     } else {
       return <Badge variant="secondary" className="bg-orange-500 text-white">Unconnected</Badge>;
     }
@@ -232,7 +238,19 @@ export default function MpesaTransactionsPage() {
 
   const getConnectedOrder = (transaction: MpesaTransaction) => {
     if (!transaction.connectedOrderId) return null;
-    return orders.find(order => order._id === transaction.connectedOrderId);
+    
+    const connectedOrder = orders.find(order => order._id === transaction.connectedOrderId);
+    
+    // Debug: Log if we can't find a connected order
+    if (!connectedOrder && transaction.isConnectedToOrder) {
+      console.warn('🔍 Connected transaction missing order:', {
+        transactionId: transaction.transactionId,
+        connectedOrderId: transaction.connectedOrderId,
+        availableOrderIds: orders.map(o => o._id).slice(0, 5) // First 5 for debugging
+      });
+    }
+    
+    return connectedOrder;
   };
 
   // Helper function to format phone number and handle corrupted data
@@ -311,10 +329,10 @@ export default function MpesaTransactionsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {transactions.filter(t => t.isConnectedToOrder).length}
+              {transactions.filter(t => t.isConnectedToOrder && getConnectedOrder(t)).length}
             </div>
             <div className="text-sm text-gray-500 mt-1">
-              Linked to orders
+              Properly linked to orders
             </div>
           </CardContent>
         </Card>
@@ -330,10 +348,10 @@ export default function MpesaTransactionsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
-              {transactions.filter(t => !t.isConnectedToOrder).length}
+              {transactions.filter(t => !t.isConnectedToOrder || (t.isConnectedToOrder && !getConnectedOrder(t))).length}
             </div>
             <div className="text-sm text-gray-500 mt-1">
-              Need manual connection
+              Need connection/fixing
             </div>
           </CardContent>
         </Card>
@@ -369,6 +387,7 @@ export default function MpesaTransactionsPage() {
                 <SelectItem value="all">All Transactions</SelectItem>
                 <SelectItem value="connected">Connected</SelectItem>
                 <SelectItem value="unconnected">Unconnected</SelectItem>
+                <SelectItem value="missing-order">Missing Order</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -458,6 +477,13 @@ export default function MpesaTransactionsPage() {
                                     <CheckCircle className="w-4 h-4 text-green-500" />
                                   )}
                                 </div>
+                              ) : transaction.isConnectedToOrder ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-red-600 text-sm">⚠️ Order Missing</span>
+                                  <span className="text-xs text-gray-500">
+                                    (ID: {transaction.connectedOrderId?.substring(0, 8)}...)
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="text-gray-400">Not connected</span>
                               )}
@@ -466,7 +492,7 @@ export default function MpesaTransactionsPage() {
                               {getStatusBadge(transaction)}
                             </TableCell>
                             <TableCell>
-                              {!transaction.isConnectedToOrder && (
+                              {!transaction.isConnectedToOrder ? (
                                 <Button 
                                   size="sm" 
                                   onClick={() => handleConnectTransaction(transaction)}
@@ -475,7 +501,20 @@ export default function MpesaTransactionsPage() {
                                   <Link2 className="w-4 h-4" />
                                   Connect
                                 </Button>
-                              )}
+                              ) : transaction.isConnectedToOrder && !getConnectedOrder(transaction) ? (
+                                <div className="flex gap-1">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => handleConnectTransaction(transaction)}
+                                    className="gap-1 text-xs"
+                                    title="Reconnect to a different order"
+                                  >
+                                    <Link2 className="w-3 h-3" />
+                                    Fix
+                                  </Button>
+                                </div>
+                              ) : null}
                             </TableCell>
                           </TableRow>
                         );
@@ -550,6 +589,13 @@ export default function MpesaTransactionsPage() {
                                     <CheckCircle className="w-4 h-4 text-green-500" />
                                   )}
                                 </div>
+                              ) : transaction.isConnectedToOrder ? (
+                                <div className="flex flex-col">
+                                  <span className="text-red-600 text-sm">⚠️ Order Missing</span>
+                                  <span className="text-xs text-gray-500">
+                                    ID: {transaction.connectedOrderId?.substring(0, 12)}...
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="text-gray-400">Not connected</span>
                               )}
@@ -557,7 +603,7 @@ export default function MpesaTransactionsPage() {
                           </div>
 
                           {/* Action button */}
-                          {!transaction.isConnectedToOrder && (
+                          {!transaction.isConnectedToOrder ? (
                             <Button 
                               size="sm" 
                               onClick={() => handleConnectTransaction(transaction)}
@@ -566,7 +612,17 @@ export default function MpesaTransactionsPage() {
                               <Link2 className="w-4 h-4" />
                               Connect to Order
                             </Button>
-                          )}
+                          ) : transaction.isConnectedToOrder && !getConnectedOrder(transaction) ? (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleConnectTransaction(transaction)}
+                              className="w-full gap-2 border-red-300 text-red-600 hover:bg-red-50"
+                            >
+                              <Link2 className="w-4 h-4" />
+                              Fix Connection
+                            </Button>
+                          ) : null}
                         </div>
                       </Card>
                     );
