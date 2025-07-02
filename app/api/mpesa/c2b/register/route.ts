@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     // Verify admin authentication
     const token = getTokenFromRequest(request);
     if (!token) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      return NextResponse.json({ error: 'Authentication !!!!! required' }, { status: 401 });
     }
 
     const decoded = verifyToken(token);
