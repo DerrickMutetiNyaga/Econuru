@@ -79,11 +79,15 @@ export async function POST(request: NextRequest) {
         transactionDateObj = new Date(year, month, day, hour, minute, second);
       }
 
-      // Check if payment amount matches order total (handle partial payments)
+      // Check if payment amount matches order total exactly (strict comparison)
       const orderTotal = order.totalAmount || 0;
       const amountPaid = parseFloat(amount) || 0;
+      const isExactPayment = amountPaid === orderTotal;
       const isPartialPayment = amountPaid < orderTotal;
-      const paymentStatus = isPartialPayment ? 'partially_paid' : 'paid';
+      const isOverPayment = amountPaid > orderTotal;
+      
+      // Only mark as 'paid' if exact amount is received
+      const paymentStatus = isExactPayment ? 'paid' : 'partially_paid';
 
       // Store the transaction in MpesaTransaction collection
       try {
@@ -101,7 +105,11 @@ export async function POST(request: NextRequest) {
           connectedOrderId: order._id,
           connectedAt: new Date(),
           connectedBy: 'system_auto_match',
-          notes: `STK Push payment for order ${order.orderNumber}. ${isPartialPayment ? `Partial payment: KES ${amountPaid} of KES ${orderTotal}` : 'Full payment received'}`
+          notes: `STK Push payment for order ${order.orderNumber}. ${
+            isExactPayment ? 'Full payment received' : 
+            isOverPayment ? `Overpayment: KES ${amountPaid} (expected KES ${orderTotal})` :
+            `Partial payment: KES ${amountPaid} of KES ${orderTotal}`
+          }`
         });
 
         await mpesaTransaction.save();
@@ -136,10 +144,12 @@ export async function POST(request: NextRequest) {
 
       await Order.findByIdAndUpdate(order._id, orderUpdate);
 
-      if (isPartialPayment) {
-        console.log(`⚠️ Partial payment received for order ${order.orderNumber}: KES ${amountPaid} of KES ${orderTotal} (Receipt: ${mpesaReceiptNumber})`);
+      if (isExactPayment) {
+        console.log(`✅ EXACT payment received for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid})`);
+      } else if (isOverPayment) {
+        console.log(`💰 OVERPAYMENT received for order ${order.orderNumber}: KES ${amountPaid} (expected KES ${orderTotal}) - Receipt: ${mpesaReceiptNumber}`);
       } else {
-        console.log(`✅ Full payment successful for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid})`);
+        console.log(`⚠️ PARTIAL payment received for order ${order.orderNumber}: KES ${amountPaid} of KES ${orderTotal} (Receipt: ${mpesaReceiptNumber})`);
       }
 
     } else {

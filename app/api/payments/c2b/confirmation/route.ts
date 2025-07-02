@@ -75,10 +75,14 @@ export async function POST(request: NextRequest) {
         });
 
         if (order) {
-          // Check if payment amount matches order total (handle partial payments)
+          // Check if payment amount matches order total exactly (strict comparison)
           const orderTotal = order.totalAmount || 0;
+          const isExactPayment = amount === orderTotal;
           const isPartialPayment = amount < orderTotal;
-          const paymentStatus = isPartialPayment ? 'partially_paid' : 'paid';
+          const isOverPayment = amount > orderTotal;
+          
+          // Only mark as 'paid' if exact amount is received
+          const paymentStatus = isExactPayment ? 'paid' : 'partially_paid';
 
           // Update order with payment details
           await Order.findByIdAndUpdate(order._id, {
@@ -102,10 +106,12 @@ export async function POST(request: NextRequest) {
           });
 
           orderUpdated = true;
-          if (isPartialPayment) {
-            console.log(`⚠️ Partial C2B payment for order ${order.orderNumber}: KES ${amount} of KES ${orderTotal} (${transID})`);
+          if (isExactPayment) {
+            console.log(`✅ EXACT C2B payment for order ${order.orderNumber}: ${transID} (KES ${amount})`);
+          } else if (isOverPayment) {
+            console.log(`💰 C2B OVERPAYMENT for order ${order.orderNumber}: KES ${amount} (expected KES ${orderTotal}) - ${transID}`);
           } else {
-            console.log(`✅ Full C2B payment for order ${order.orderNumber}: ${transID} (KES ${amount})`);
+            console.log(`⚠️ PARTIAL C2B payment for order ${order.orderNumber}: KES ${amount} of KES ${orderTotal} (${transID})`);
           }
         }
       } catch (error) {
@@ -178,8 +184,12 @@ export async function POST(request: NextRequest) {
           // Exact match found - update this order
           const matchedOrder = matchingOrders[0];
           const orderTotal = matchedOrder.totalAmount || 0;
+          const isExactPayment = amount === orderTotal;
           const isPartialPayment = amount < orderTotal;
-          const paymentStatus = isPartialPayment ? 'partially_paid' : 'paid';
+          const isOverPayment = amount > orderTotal;
+          
+          // Only mark as 'paid' if exact amount is received
+          const paymentStatus = isExactPayment ? 'paid' : 'partially_paid';
           
           await Order.findByIdAndUpdate(matchedOrder._id, {
             paymentStatus: paymentStatus,
@@ -202,10 +212,12 @@ export async function POST(request: NextRequest) {
           });
 
           orderUpdated = true;
-          if (isPartialPayment) {
-            console.log(`⚠️ Partial payment matched to order ${matchedOrder.orderNumber}: KES ${amount} of KES ${orderTotal} (${transID})`);
+          if (isExactPayment) {
+            console.log(`✅ EXACT payment matched to order ${matchedOrder.orderNumber}: ${transID} (KES ${amount})`);
+          } else if (isOverPayment) {
+            console.log(`💰 OVERPAYMENT matched to order ${matchedOrder.orderNumber}: KES ${amount} (expected KES ${orderTotal}) - ${transID}`);
           } else {
-            console.log(`✅ Order ${matchedOrder.orderNumber} matched and updated with C2B payment: ${transID}`);
+            console.log(`⚠️ PARTIAL payment matched to order ${matchedOrder.orderNumber}: KES ${amount} of KES ${orderTotal} (${transID})`);
           }
           console.log(`📊 Match criteria: Amount=${amount}, Time window=2hrs, Customer=${[firstName, middleName, lastName].filter(Boolean).join(' ')}`);
           

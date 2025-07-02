@@ -1286,6 +1286,45 @@ export default function OrdersPage() {
                           <span className="text-gray-700 font-medium">Total:</span>
                           <span className="text-mint-green font-bold">Ksh {(order.totalAmount || 0).toLocaleString()}</span>
                         </div>
+                        
+                        {/* Payment Status Information */}
+                        {(order.paymentStatus === 'paid' || order.paymentStatus === 'partially_paid') && (
+                          <div className="mt-2 pt-2 border-t border-amber-200 space-y-1">
+                            {order.paymentStatus === 'paid' && (
+                              <>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-green-700 font-medium">Payment Status:</span>
+                                  <span className="text-green-700 font-bold">✅ FULLY PAID</span>
+                                </div>
+                                {order.amountPaid && order.amountPaid > order.totalAmount && (
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-blue-700 font-medium">Overpaid by:</span>
+                                    <span className="text-blue-700 font-bold">+Ksh {(order.amountPaid - order.totalAmount).toLocaleString()}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            {order.paymentStatus === 'partially_paid' && order.amountPaid && (
+                              <>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-yellow-700 font-medium">Amount Paid:</span>
+                                  <span className="text-yellow-700 font-bold">Ksh {order.amountPaid.toLocaleString()}</span>
+                                </div>
+                                {order.amountPaid < order.totalAmount ? (
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-red-700 font-medium">Remaining:</span>
+                                    <span className="text-red-700 font-bold">Ksh {(order.totalAmount - order.amountPaid).toLocaleString()}</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-blue-700 font-medium">Overpaid by:</span>
+                                    <span className="text-blue-700 font-bold">+Ksh {(order.amountPaid - order.totalAmount).toLocaleString()}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 

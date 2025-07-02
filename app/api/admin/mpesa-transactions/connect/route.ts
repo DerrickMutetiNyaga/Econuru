@@ -54,11 +54,15 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Check if payment amount matches order total (handle partial payments)
+    // Check if payment amount matches order total exactly (strict comparison)
     const orderTotal = order.totalAmount || 0;
     const amountPaid = transaction.amountPaid || 0;
+    const isExactPayment = amountPaid === orderTotal;
     const isPartialPayment = amountPaid < orderTotal;
-    const paymentStatus = isPartialPayment ? 'partially_paid' : 'paid';
+    const isOverPayment = amountPaid > orderTotal;
+    
+    // Only mark as 'paid' if exact amount is received
+    const paymentStatus = isExactPayment ? 'paid' : 'partially_paid';
 
     // Update the order with payment details
     await Order.findByIdAndUpdate(orderId, {
@@ -90,20 +94,26 @@ export async function POST(request: NextRequest) {
       notes: `${transaction.notes} Connected to order ${order.orderNumber} by admin.`
     });
 
-    const logMessage = isPartialPayment 
-      ? `🔗⚠️ Partial payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid} of KES ${orderTotal})`
-      : `🔗✅ Transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email}`;
+    const logMessage = isExactPayment 
+      ? `🔗✅ EXACT payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid})`
+      : isOverPayment
+      ? `🔗💰 OVERPAYMENT transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid} for KES ${orderTotal})`
+      : `🔗⚠️ PARTIAL payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid} of KES ${orderTotal})`;
     
     console.log(logMessage);
 
-    const successMessage = isPartialPayment
-      ? `Transaction ${transactionId} connected as partial payment (KES ${amountPaid} of KES ${orderTotal}) to order ${order.orderNumber}`
-      : `Transaction ${transactionId} successfully connected to order ${order.orderNumber}`;
+    const successMessage = isExactPayment
+      ? `Transaction ${transactionId} successfully connected to order ${order.orderNumber} - EXACT payment received`
+      : isOverPayment
+      ? `Transaction ${transactionId} connected as overpayment (KES ${amountPaid} for KES ${orderTotal}) to order ${order.orderNumber}`
+      : `Transaction ${transactionId} connected as partial payment (KES ${amountPaid} of KES ${orderTotal}) to order ${order.orderNumber}`;
 
     return NextResponse.json({
       success: true,
       message: successMessage,
+      isExactPayment: isExactPayment,
       isPartialPayment: isPartialPayment,
+      isOverPayment: isOverPayment,
       amountPaid: amountPaid,
       orderTotal: orderTotal,
       transaction: {
