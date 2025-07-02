@@ -21,8 +21,8 @@ Add these to your `.env` file:
 
 ```env
 # C2B Register URL Configuration
-MPESA_C2B_VALIDATION_URL=https://econuru.co.ke/api/mpesa/c2b/validation
-MPESA_C2B_CONFIRMATION_URL=https://econuru.co.ke/api/mpesa/c2b/confirmation
+MPESA_C2B_VALIDATION_URL=https://econuru.co.ke/api/payments/c2b/validation
+MPESA_C2B_CONFIRMATION_URL=https://econuru.co.ke/api/payments/c2b/confirmation
 MPESA_C2B_RESPONSE_TYPE=Completed
 MPESA_C2B_ENABLE_VALIDATION=false
 ```
@@ -46,7 +46,7 @@ MPESA_C2B_ENABLE_VALIDATION=false
 
 #### **For Sandbox Testing:**
 1. Use the admin panel: `/admin/dashboard` → M-Pesa → Register C2B URLs
-2. Or make API call to: `POST /api/mpesa/c2b/register`
+2. Or make API call to: `POST /api/payments/c2b/register`
 
 #### **For Production:**
 1. **First time**: Use the admin panel or API
@@ -104,7 +104,7 @@ flowchart TD
 
 ## 🛠️ Implementation Details
 
-### **1. Validation Endpoint** (`/api/mpesa/c2b/validation`)
+### **1. Validation Endpoint** (`/api/payments/c2b/validation`)
 - **Called**: Before payment processing (if enabled)
 - **Purpose**: Validate payment details, reject if needed
 - **Response**: `Accept (0)` or `Reject (error code)`
@@ -116,13 +116,13 @@ flowchart TD
 - Ensure customer is active
 - Validate minimum amount
 
-### **2. Confirmation Endpoint** (`/api/mpesa/c2b/confirmation`)
+### **2. Confirmation Endpoint** (`/api/payments/c2b/confirmation`)
 - **Called**: After successful payment
 - **Purpose**: Update order status, create customer records
 - **Response**: Always return success
 - **Action**: Update database with payment details
 
-### **3. Register URL Endpoint** (`/api/mpesa/c2b/register`)
+### **3. Register URL Endpoint** (`/api/payments/c2b/register`)
 - **Purpose**: Register validation/confirmation URLs with M-Pesa
 - **Access**: Admin only
 - **Frequency**: Once per environment (sandbox allows multiple)

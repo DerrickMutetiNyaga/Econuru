@@ -27,7 +27,7 @@ export default function MpesaC2BPage() {
 
   const loadC2BSettings = async () => {
     try {
-      const response = await fetch('/api/mpesa/c2b/register');
+      const response = await fetch('/api/payments/c2b/register');
       if (response.ok) {
         const data = await response.json();
         setC2bSettings(data);
@@ -45,7 +45,7 @@ export default function MpesaC2BPage() {
   const registerC2BURLs = async () => {
     setIsRegistering(true);
     try {
-      const response = await fetch('/api/mpesa/c2b/register', {
+      const response = await fetch('/api/payments/c2b/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

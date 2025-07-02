@@ -89,8 +89,8 @@ Check Vercel function logs for these successful patterns:
 
 Ensure these URLs are registered with Safaricom:
 - **Callback URL**: `https://www.econuru.co.ke/api/mpesa/callback`
-- **Validation URL**: `https://www.econuru.co.ke/api/mpesa/c2b/validation`
-- **Confirmation URL**: `https://www.econuru.co.ke/api/mpesa/c2b/confirmation`
+- **Validation URL**: `https://www.econuru.co.ke/api/payments/c2b/validation`
+- **Confirmation URL**: `https://www.econuru.co.ke/api/payments/c2b/confirmation`
 
 ## Next Steps
 
