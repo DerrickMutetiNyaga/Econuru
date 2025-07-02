@@ -37,7 +37,7 @@ interface MpesaTransaction {
   transactionType: string;
   customerName: string;
   isConnectedToOrder: boolean;
-  connectedOrderId?: string;
+  connectedOrderId?: string | Order; // Can be either string ID or populated Order object
   connectedAt?: string;
   connectedBy?: string;
   notes?: string;
@@ -255,8 +255,23 @@ export default function MpesaTransactionsPage() {
   const getConnectedOrder = (transaction: MpesaTransaction) => {
     if (!transaction.connectedOrderId) return null;
     
-    // Convert ObjectId to string for comparison
-    const connectedOrderIdStr = String(transaction.connectedOrderId);
+    // Handle both populated objects and raw ObjectIds
+    let connectedOrderIdStr: string;
+    if (typeof transaction.connectedOrderId === 'object' && transaction.connectedOrderId._id) {
+      // If it's already populated, return it directly
+      console.log('✅ Using populated order:', {
+        transactionId: transaction.transactionId,
+        orderNumber: transaction.connectedOrderId.orderNumber,
+        orderId: transaction.connectedOrderId._id
+      });
+      return transaction.connectedOrderId as any; // Cast to Order type
+    } else if (typeof transaction.connectedOrderId === 'object') {
+      // If it's an ObjectId object, extract the string
+      connectedOrderIdStr = String(transaction.connectedOrderId);
+    } else {
+      // If it's already a string
+      connectedOrderIdStr = transaction.connectedOrderId;
+    }
     
     const connectedOrder = orders.find(order => {
       const orderIdStr = String(order._id);
