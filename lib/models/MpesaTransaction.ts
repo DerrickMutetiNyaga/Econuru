@@ -113,7 +113,6 @@ MpesaTransactionSchema.pre('save', function(next) {
 });
 
 // Create indexes for better performance
-MpesaTransactionSchema.index({ transactionId: 1 });
 MpesaTransactionSchema.index({ mpesaReceiptNumber: 1 });
 MpesaTransactionSchema.index({ phoneNumber: 1 });
 MpesaTransactionSchema.index({ isConnectedToOrder: 1 });

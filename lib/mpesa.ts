@@ -321,14 +321,30 @@ class MpesaService {
     } catch (error: any) {
       console.error('STK status query error:', error);
       
-      // Log detailed error information
+      // Check if this is the "transaction is being processed" response
+      if (error.response?.status === 500 && 
+          error.response?.data?.errorCode === '500.001.1001' &&
+          error.response?.data?.errorMessage === 'The transaction is being processed') {
+        
+        console.log('Transaction is still being processed by Safaricom - this is normal');
+        return {
+          success: true,
+          isPending: true,
+          resultCode: '1032', // Pending status code
+          resultDesc: 'Transaction is being processed',
+          requestId: error.response.data.requestId,
+          message: 'Transaction is still being processed by Safaricom'
+        };
+      }
+      
+      // Log detailed error information for other errors
       if (error.response) {
         console.error('Status query error response status:', error.response.status);
         console.error('Status query error response headers:', error.response.headers);
         console.error('Status query error response data:', JSON.stringify(error.response.data, null, 2));
       }
       
-      // Return a structured error response instead of throwing
+      // Return a structured error response for other failures
       return {
         success: false,
         error: error.response?.data?.errorMessage || 

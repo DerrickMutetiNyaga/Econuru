@@ -90,6 +90,29 @@ export async function GET(
         mpesaError: statusResponse.error
       });
     }
+
+    // Handle pending transaction (still being processed)
+    if (statusResponse.isPending || statusResponse.resultCode === '1032') {
+      console.log('Transaction is still pending/being processed');
+      return NextResponse.json({
+        success: true,
+        order: {
+          _id: order._id,
+          orderNumber: order.orderNumber,
+          paymentStatus: 'pending',
+          checkoutRequestId: order.checkoutRequestId,
+          phoneNumber: order.phoneNumber,
+          mpesaReceiptNumber: order.mpesaReceiptNumber,
+          amountPaid: order.amountPaid,
+          resultCode: order.resultCode,
+          resultDescription: order.resultDescription,
+          paymentInitiatedAt: order.paymentInitiatedAt,
+          paymentCompletedAt: order.paymentCompletedAt
+        },
+        message: statusResponse.message || 'Transaction is still being processed',
+        isPending: true
+      });
+    }
     
     // Update order based on M-Pesa response
     if (statusResponse.ResultCode === '0') {
