@@ -79,8 +79,9 @@ export async function POST(request: NextRequest) {
         transactionDateObj = new Date(year, month, day, hour, minute, second);
       }
 
-      // Get the requested payment amount from pending payment data
+      // Get the requested payment amount and type from pending payment data
       const requestedAmount = order.pendingMpesaPayment?.amount || order.totalAmount || 0;
+      const paymentType = order.pendingMpesaPayment?.paymentType || 'full';
       const orderTotal = order.totalAmount || 0;
       const amountPaid = parseFloat(amount) || 0;
       
@@ -92,13 +93,20 @@ export async function POST(request: NextRequest) {
 
       // Log original phone number from Safaricom
       console.log(`📱 STK Push - Phone number received from Safaricom: ${phoneNumber || 'Unknown'}`);
-      console.log(`💰 Payment Analysis: Requested=${requestedAmount}, Paid=${amountPaid}, OrderTotal=${orderTotal}`);
+      console.log(`💰 Payment Analysis: Type=${paymentType}, Requested=${requestedAmount}, Paid=${amountPaid}, OrderTotal=${orderTotal}`);
 
       if (isRequestedAmountPaid) {
-        // REQUESTED AMOUNT PAID: Auto-connect and determine payment status based on math
+        // REQUESTED AMOUNT PAID: Auto-connect and determine payment status based on payment type
         try {
-          // Determine payment status based on order completion
-          const paymentStatus = isFullOrderPayment ? 'paid' : 'partially_paid';
+          let paymentStatus: string;
+          
+          if (paymentType === 'full') {
+            // For full payment, check if the amount equals the full order amount
+            paymentStatus = isFullOrderPayment ? 'paid' : 'partial';
+          } else {
+            // For partial payment, always mark as partial (unless it happens to equal full amount)
+            paymentStatus = isFullOrderPayment ? 'paid' : 'partial';
+          }
           
           const mpesaTransaction = new MpesaTransaction({
             transactionId: mpesaReceiptNumber,

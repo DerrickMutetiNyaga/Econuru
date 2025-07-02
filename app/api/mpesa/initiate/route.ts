@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { orderId, phoneNumber, amount } = await request.json();
+    const { orderId, phoneNumber, amount, paymentType = 'full' } = await request.json();
 
     if (!orderId || !phoneNumber || !amount) {
       return NextResponse.json(
@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
             merchantRequestId: result.merchantRequestId,
             amount: amount,
             phoneNumber: phoneNumber,
+            paymentType: paymentType,
             initiatedAt: new Date(),
             status: 'pending'
           }

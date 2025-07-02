@@ -132,6 +132,7 @@ export default function OrdersPage() {
   const [orderForPayment, setOrderForPayment] = useState<Order | null>(null);
   const [paymentPhone, setPaymentPhone] = useState('');
   const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
   const [initiatingPayment, setInitiatingPayment] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   // Manual payment connection states
@@ -370,11 +371,25 @@ export default function OrdersPage() {
     setDeleteDialogOpen(true);
   };
 
+  // Handler for payment type change
+  const handlePaymentTypeChange = (type: 'full' | 'partial') => {
+    setPaymentType(type);
+    if (orderForPayment) {
+      if (type === 'full') {
+        setPaymentAmount(orderForPayment.totalAmount - (orderForPayment.amountPaid || 0));
+      } else {
+        // For partial payment, allow user to enter any amount
+        setPaymentAmount(0);
+      }
+    }
+  };
+
   // M-Pesa Payment Functions
   const handleInitiatePayment = (order: Order) => {
     setOrderForPayment(order);
     setPaymentPhone(order.customer.phone);
-    setPaymentAmount(order.totalAmount);
+    setPaymentType('full');
+    setPaymentAmount(order.totalAmount - (order.amountPaid || 0));
     setPaymentDialogOpen(true);
   };
 
@@ -401,6 +416,7 @@ export default function OrdersPage() {
           orderId: orderForPayment._id,
           phoneNumber: paymentPhone,
           amount: paymentAmount,
+          paymentType: paymentType,
         }),
       });
 
@@ -426,6 +442,7 @@ export default function OrdersPage() {
         setOrderForPayment(null);
         setPaymentPhone('');
         setPaymentAmount(0);
+        setPaymentType('full');
 
         // Start polling for payment status
         pollPaymentStatus(data.checkoutRequestId);
@@ -2349,6 +2366,27 @@ export default function OrdersPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Payment Type
+                  </label>
+                  <Select value={paymentType} onValueChange={handlePaymentTypeChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select payment type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full">Full Payment</SelectItem>
+                      <SelectItem value="partial">Partial Payment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {paymentType === 'full' 
+                      ? 'Will check if transaction amount equals full order amount' 
+                      : 'Will accept any payment amount as partial payment'
+                    }
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Payment Amount (Ksh)
                   </label>
                   <Input
@@ -2356,11 +2394,19 @@ export default function OrdersPage() {
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(Number(e.target.value))}
                     min="1"
-                    max={orderForPayment.totalAmount}
+                    max={paymentType === 'full' ? (orderForPayment.totalAmount - (orderForPayment.amountPaid || 0)) : undefined}
                     className="w-full"
+                    placeholder={paymentType === 'full' ? 
+                      `${orderForPayment.totalAmount - (orderForPayment.amountPaid || 0)}` : 
+                      'Enter partial payment amount'
+                    }
+                    disabled={paymentType === 'full'}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Maximum: Ksh {orderForPayment.totalAmount.toLocaleString()}
+                    {paymentType === 'full' 
+                      ? `Full payment: Ksh ${(orderForPayment.totalAmount - (orderForPayment.amountPaid || 0)).toLocaleString()}`
+                      : `Enter any amount up to Ksh ${(orderForPayment.totalAmount - (orderForPayment.amountPaid || 0)).toLocaleString()}`
+                    }
                   </p>
                 </div>
               </div>
@@ -2389,6 +2435,7 @@ export default function OrdersPage() {
                 setOrderForPayment(null);
                 setPaymentPhone('');
                 setPaymentAmount(0);
+                setPaymentType('full');
               }}
               disabled={initiatingPayment}
             >

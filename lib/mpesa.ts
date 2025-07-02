@@ -14,6 +14,7 @@ export interface STKPushRequest {
   amount: number;
   orderId: string;
   callbackUrl: string;
+  paymentType?: 'full' | 'partial';
 }
 
 export interface STKPushResponse {
