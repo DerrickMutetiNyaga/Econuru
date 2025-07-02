@@ -108,7 +108,7 @@ export function getAccessiblePages(user: IUser | null): string[] {
   if (user.role === 'superadmin') {
     return [
       'dashboard', 'orders', 'pos', 'customers', 'services', 'categories',
-      'reports', 'payments', 'users', 'expenses', 'gallery', 'testimonials', 'promotions', 'settings'
+      'reports', 'payments', 'mpesa-transactions', 'users', 'expenses', 'gallery', 'testimonials', 'promotions', 'settings'
     ];
   }
 
@@ -160,6 +160,7 @@ export const ADMIN_PAGES = {
   services: { label: 'Services', icon: 'Settings', path: '/admin/services' },
   reports: { label: 'Reports', icon: 'BarChart', path: '/admin/reports' },
   payments: { label: 'Payments', icon: 'DollarSign', path: '/admin/payments' },
+  'mpesa-transactions': { label: 'M-Pesa Transactions', icon: 'Smartphone', path: '/admin/mpesa-transactions' },
   users: { label: 'User Management', icon: 'UserCog', path: '/admin/users' },
   expenses: { label: 'Expenses', icon: 'Receipt', path: '/admin/expenses' },
   gallery: { label: 'Gallery', icon: 'Image', path: '/admin/gallery' },

@@ -252,6 +252,15 @@ export default function PaymentsPage() {
           <p className="text-gray-600 mt-2">Monitor and manage all M-Pesa transactions</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            onClick={() => router.push('/admin/mpesa-transactions')} 
+            variant="default" 
+            size="sm" 
+            className="gap-2"
+          >
+            <Smartphone className="w-4 h-4" />
+            M-Pesa Manager
+          </Button>
           <Button onClick={exportPayments} variant="outline" size="sm" className="gap-2">
             <Download className="w-4 h-4" />
             Export CSV

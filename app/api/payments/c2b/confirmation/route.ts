@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
 import Customer from '@/lib/models/Customer';
+import MpesaTransaction from '@/lib/models/MpesaTransaction';
 import { C2BConfirmationRequest, C2BConfirmationResponse } from '@/lib/mpesa';
 
 export async function POST(request: NextRequest) {
@@ -207,36 +208,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // If still no order matched, create a standalone payment record
+    // If no order matched, create a standalone M-Pesa transaction record
     if (!orderUpdated) {
       try {
-        // Create a new order for this standalone payment
-        const orderNumber = `C2B-${Date.now()}`;
-        const customerName = [firstName, middleName, lastName].filter(Boolean).join(' ') || 'C2B Customer';
+        const customerName = [firstName, middleName, lastName].filter(Boolean).join(' ') || 'Unknown Customer';
         
-        const newOrder = new Order({
-          orderNumber: orderNumber,
-          customer: {
-            name: customerName,
-            phone: formattedPhone,
-            email: '',
-            address: ''
-          },
-          services: [{
-            serviceId: 'c2b-payment',
-            serviceName: 'C2B Payment',
-            quantity: 1,
-            price: amount.toString()
-          }],
-          location: 'main-branch',
-          totalAmount: amount,
-          pickDropAmount: 0,
-          discount: 0,
-          paymentStatus: 'paid',
-          laundryStatus: 'to-be-picked',
-          status: 'pending',
-          paymentMethod: 'mpesa_c2b',
-          c2bPayment: {
+        // Check if this transaction already exists
+        const existingTransaction = await MpesaTransaction.findOne({ 
+          transactionId: transID 
+        });
+
+        if (!existingTransaction) {
+          const mpesaTransaction = new MpesaTransaction({
             transactionId: transID,
             mpesaReceiptNumber: transID,
             transactionDate: transactionDate,
@@ -247,55 +230,28 @@ export async function POST(request: NextRequest) {
             thirdPartyTransID: thirdPartyTransID,
             orgAccountBalance: orgAccountBalance,
             customerName: customerName,
-            paymentCompletedAt: new Date()
-          },
-          notes: `Standalone C2B payment. Receipt: ${transID}. Customer: ${customerName}`
-        });
+            paymentCompletedAt: new Date(),
+            isConnectedToOrder: false,
+            notes: `Unmatched C2B payment. Awaiting manual connection to order.`
+          });
 
-        await newOrder.save();
-        orderUpdated = true;
-        console.log(`✅ Standalone C2B payment order created: ${orderNumber}`);
+          await mpesaTransaction.save();
+          console.log(`💾 Standalone M-Pesa transaction saved: ${transID} (KES ${amount}) - ${customerName}`);
+          console.log(`🔗 Transaction can be manually connected to order via admin dashboard`);
+        } else {
+          console.log(`⚠️ Transaction ${transID} already exists in database`);
+        }
       } catch (error) {
-        console.error('Error creating standalone payment order:', error);
+        console.error('Error saving M-Pesa transaction:', error);
       }
     }
 
-    // Log 
-
-
-    if (!orderUpdated && !billRefNumber) {
-      try {
-        const mpesaTransaction = new MpesaTransaction({
-          transactionId: transID,
-          mpesaReceiptNumber: transID,
-          transactionDate: transactionDate,
-          phoneNumber: formattedPhone,
-          amountPaid: amount,
-          transactionType: transactionType,
-          billRefNumber: billRefNumber || '',
-          thirdPartyTransID: thirdPartyTransID,
-          orgAccountBalance: orgAccountBalance,
-          customerName: [firstName, middleName, lastName].filter(Boolean).join(' ') || 'C2B Customer',
-          paymentCompletedAt: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          notes: `Standalone C2B payment received. Receipt: ${transID}`
-        });
-    
-        await mpesaTransaction.save();
-        orderUpdated = true;
-        console.log(`✅ C2B transaction saved: ${transID}`);
-      } catch (error) {
-        console.error('Error saving C2B transaction:', error);
-        console.error('Error details:', error.message);
-      }
-    }
-    success
-    console.log(`// 💰 C2B Payment processed // successfully:
+    // Log payment processing result
+    console.log(`💰 C2B Payment processed successfully:
       Transaction ID: ${transID}
       Amount: KES ${amount}
-//       Phone: ${formattedPhone}
-      Customer: ${[firstNa// me, middl// eName, lastName].filter(Boolean).join(' ')}
+      Phone: ${formattedPhone}
+      Customer: ${[firstName, middleName, lastName].filter(Boolean).join(' ')}
       Bill Ref: ${billRefNumber || 'None'}
       Order Updated: ${orderUpdated}
       Customer Updated: ${customerUpdated}
