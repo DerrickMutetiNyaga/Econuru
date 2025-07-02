@@ -246,6 +246,7 @@ export default function MpesaTransactionsPage() {
       console.warn('🔍 Connected transaction missing order:', {
         transactionId: transaction.transactionId,
         connectedOrderId: transaction.connectedOrderId,
+        connectedOrderIdType: typeof transaction.connectedOrderId,
         availableOrderIds: orders.map(o => o._id).slice(0, 5) // First 5 for debugging
       });
     }
@@ -254,19 +255,29 @@ export default function MpesaTransactionsPage() {
   };
 
   // Helper function to format phone number and handle corrupted data
-  const formatPhoneNumber = (phoneNumber: string) => {
+  const formatPhoneNumber = (phoneNumber: string | null | undefined) => {
+    // Convert to string and handle null/undefined
+    const phoneStr = phoneNumber ? String(phoneNumber) : '';
+    
     // Check if it looks like a hash (64 characters, all hex)
-    if (phoneNumber && phoneNumber.length === 64 && /^[a-f0-9]+$/i.test(phoneNumber)) {
+    if (phoneStr && phoneStr.length === 64 && /^[a-f0-9]+$/i.test(phoneStr)) {
       return 'Data Error';
     }
     
     // Check if it's empty or 'Unknown'
-    if (!phoneNumber || phoneNumber === 'Unknown') {
+    if (!phoneStr || phoneStr === 'Unknown') {
       return 'Unknown';
     }
     
     // Return the phone number as-is
-    return phoneNumber;
+    return phoneStr;
+  };
+
+  // Helper function to safely format order ID for display
+  const formatOrderId = (orderId: string | null | undefined, maxLength: number = 8) => {
+    if (!orderId) return 'Unknown';
+    const idStr = String(orderId);
+    return idStr.length > maxLength ? idStr.substring(0, maxLength) + '...' : idStr;
   };
 
   if (!isAdmin) return null;
@@ -481,7 +492,7 @@ export default function MpesaTransactionsPage() {
                                 <div className="flex items-center gap-2">
                                   <span className="text-red-600 text-sm">⚠️ Order Missing</span>
                                   <span className="text-xs text-gray-500">
-                                    (ID: {transaction.connectedOrderId?.substring(0, 8)}...)
+                                    (ID: {formatOrderId(transaction.connectedOrderId, 8)})
                                   </span>
                                 </div>
                               ) : (
@@ -593,7 +604,7 @@ export default function MpesaTransactionsPage() {
                                 <div className="flex flex-col">
                                   <span className="text-red-600 text-sm">⚠️ Order Missing</span>
                                   <span className="text-xs text-gray-500">
-                                    ID: {transaction.connectedOrderId?.substring(0, 12)}...
+                                    ID: {formatOrderId(transaction.connectedOrderId, 12)}
                                   </span>
                                 </div>
                               ) : (
