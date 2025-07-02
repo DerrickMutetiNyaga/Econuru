@@ -72,6 +72,22 @@ export async function POST(request: NextRequest) {
         paymentInitiatedAt: new Date()
       });
 
+      // Store the pending payment for later matching
+      await Order.findByIdAndUpdate(orderId, {
+        $set: {
+          'pendingMpesaPayment': {
+            checkoutRequestId: result.checkoutRequestId,
+            merchantRequestId: result.merchantRequestId,
+            amount: amount,
+            phoneNumber: phoneNumber,
+            initiatedAt: new Date(),
+            status: 'pending'
+          }
+        }
+      });
+
+      console.log(`💾 Stored pending payment data for order ${orderId}`);
+
       return NextResponse.json({
         success: true,
         message: 'STK Push sent successfully',

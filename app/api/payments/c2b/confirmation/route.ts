@@ -6,7 +6,7 @@ import { C2BConfirmationRequest, C2BConfirmationResponse } from '@/lib/mpesa';
 
 export async function POST(request: NextRequest) {
   try {
-    const confirmationData: C2BConfirmationRequest = await request.json();
+    const confirmationData: any = await request.json();
     
     console.log('💰 C2B Confirmation Request received:', JSON.stringify(confirmationData, null, 2));
 
@@ -149,8 +149,66 @@ export async function POST(request: NextRequest) {
       console.error('Error handling customer:', error);
     }
 
-    // If no order was found, create a standalone payment record
-    if (!orderUpdated && !billRefNumber) {
+    // If no order was found by bill reference, try intelligent matching for till number payments
+    if (!orderUpdated && (!billRefNumber || billRefNumber === '')) {
+      try {
+        console.log(`🔍 Attempting intelligent order matching for amount: KES ${amount}`);
+        
+        // Find pending orders with matching amount in the last 2 hours
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        
+        const matchingOrders = await Order.find({
+          totalAmount: amount,
+          paymentStatus: { $in: ['unpaid', 'pending'] },
+          createdAt: { $gte: twoHoursAgo },
+          paymentMethod: { $ne: 'mpesa_c2b' } // Avoid already processed orders
+        }).sort({ createdAt: -1 }); // Most recent first
+
+        if (matchingOrders.length === 1) {
+          // Exact match found - update this order
+          const matchedOrder = matchingOrders[0];
+          
+          await Order.findByIdAndUpdate(matchedOrder._id, {
+            paymentStatus: 'paid',
+            paymentMethod: 'mpesa_c2b',
+            $set: {
+              'c2bPayment': {
+                transactionId: transID,
+                mpesaReceiptNumber: transID,
+                transactionDate: transactionDate,
+                phoneNumber: formattedPhone,
+                amountPaid: amount,
+                transactionType: transactionType,
+                billRefNumber: billRefNumber || 'TILL_PAYMENT',
+                thirdPartyTransID: thirdPartyTransID,
+                orgAccountBalance: orgAccountBalance,
+                customerName: [firstName, middleName, lastName].filter(Boolean).join(' '),
+                paymentCompletedAt: new Date()
+              }
+            }
+          });
+
+          orderUpdated = true;
+          console.log(`✅ Order ${matchedOrder.orderNumber} matched and updated with C2B payment: ${transID}`);
+          console.log(`📊 Match criteria: Amount=${amount}, Time window=2hrs, Customer=${[firstName, middleName, lastName].filter(Boolean).join(' ')}`);
+          
+        } else if (matchingOrders.length > 1) {
+          // Multiple matches - log for manual review but create standalone record
+          console.log(`⚠️ Multiple orders found with amount KES ${amount}:`);
+          matchingOrders.forEach(order => {
+            console.log(`   - ${order.orderNumber} (${order.customer.name}) - ${order.createdAt}`);
+          });
+          console.log(`🔄 Creating standalone payment record for manual matching`);
+        } else {
+          console.log(`📭 No matching orders found for amount KES ${amount} in last 2 hours`);
+        }
+      } catch (error) {
+        console.error('Error during intelligent order matching:', error);
+      }
+    }
+
+    // If still no order matched, create a standalone payment record
+    if (!orderUpdated) {
       try {
         // Create a new order for this standalone payment
         const orderNumber = `C2B-${Date.now()}`;
@@ -185,15 +243,13 @@ export async function POST(request: NextRequest) {
             phoneNumber: formattedPhone,
             amountPaid: amount,
             transactionType: transactionType,
-            billRefNumber: billRefNumber || '',
+            billRefNumber: billRefNumber || 'TILL_PAYMENT',
             thirdPartyTransID: thirdPartyTransID,
             orgAccountBalance: orgAccountBalance,
             customerName: customerName,
             paymentCompletedAt: new Date()
           },
-          notes: `Standalone C2B payment. Receipt: ${transID}. Customer: ${customerName}`,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          notes: `Standalone C2B payment. Receipt: ${transID}. Customer: ${customerName}`
         });
 
         await newOrder.save();
@@ -201,16 +257,45 @@ export async function POST(request: NextRequest) {
         console.log(`✅ Standalone C2B payment order created: ${orderNumber}`);
       } catch (error) {
         console.error('Error creating standalone payment order:', error);
-        console.error('Error details:', error.message);
       }
     }
 
-    // Log success
-    console.log(`💰 C2B Payment processed successfully:
+    // Log 
+
+
+    if (!orderUpdated && !billRefNumber) {
+      try {
+        const mpesaTransaction = new MpesaTransaction({
+          transactionId: transID,
+          mpesaReceiptNumber: transID,
+          transactionDate: transactionDate,
+          phoneNumber: formattedPhone,
+          amountPaid: amount,
+          transactionType: transactionType,
+          billRefNumber: billRefNumber || '',
+          thirdPartyTransID: thirdPartyTransID,
+          orgAccountBalance: orgAccountBalance,
+          customerName: [firstName, middleName, lastName].filter(Boolean).join(' ') || 'C2B Customer',
+          paymentCompletedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          notes: `Standalone C2B payment received. Receipt: ${transID}`
+        });
+    
+        await mpesaTransaction.save();
+        orderUpdated = true;
+        console.log(`✅ C2B transaction saved: ${transID}`);
+      } catch (error) {
+        console.error('Error saving C2B transaction:', error);
+        console.error('Error details:', error.message);
+      }
+    }
+    success
+    console.log(`// 💰 C2B Payment processed // successfully:
       Transaction ID: ${transID}
       Amount: KES ${amount}
-      Phone: ${formattedPhone}
-      Customer: ${[firstName, middleName, lastName].filter(Boolean).join(' ')}
+//       Phone: ${formattedPhone}
+      Customer: ${[firstNa// me, middl// eName, lastName].filter(Boolean).join(' ')}
       Bill Ref: ${billRefNumber || 'None'}
       Order Updated: ${orderUpdated}
       Customer Updated: ${customerUpdated}

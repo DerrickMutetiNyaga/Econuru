@@ -22,7 +22,10 @@ import {
   Smartphone,
   Receipt,
   Eye,
-  Filter
+  Filter,
+  AlertCircle,
+  Calendar,
+  Search
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
@@ -519,6 +522,164 @@ export default function PaymentsPage() {
             )}
           </CardContent>
         </Card>
+
+      {/* M-Pesa Transactions Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Smartphone className="w-5 h-5 text-green-600" />
+            M-Pesa Transactions
+          </CardTitle>
+          <CardDescription>
+            Detailed view of all M-Pesa STK Push and C2B transactions
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-32 space-y-4">
+              <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+              <p className="text-gray-500">Loading M-Pesa transactions...</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* M-Pesa Transaction Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-green-600 font-medium">STK Push Payments</p>
+                      <p className="text-2xl font-bold text-green-700">
+                        {filteredPayments.filter(p => p.paymentMethod === 'mpesa_stk').length}
+                      </p>
+                    </div>
+                    <Smartphone className="w-8 h-8 text-green-600" />
+                  </div>
+                </div>
+                
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-blue-600 font-medium">C2B Payments</p>
+                      <p className="text-2xl font-bold text-blue-700">
+                        {filteredPayments.filter(p => p.paymentMethod === 'mpesa_c2b').length}
+                      </p>
+                    </div>
+                    <CreditCard className="w-8 h-8 text-blue-600" />
+                  </div>
+                </div>
+                
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-purple-600 font-medium">Total M-Pesa Revenue</p>
+                      <p className="text-2xl font-bold text-purple-700">
+                        KES {filteredPayments
+                          .filter(p => p.paymentMethod.includes('mpesa') && p.paymentStatus === 'paid')
+                          .reduce((sum, p) => sum + p.totalAmount, 0)
+                          .toLocaleString()}
+                      </p>
+                    </div>
+                    <DollarSign className="w-8 h-8 text-purple-600" />
+                  </div>
+                </div>
+              </div>
+
+              {/* M-Pesa Transactions List */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-lg">Recent M-Pesa Transactions</h4>
+                {filteredPayments
+                  .filter(payment => payment.paymentMethod.includes('mpesa'))
+                  .slice(0, 10)
+                  .map((payment) => (
+                    <div key={payment._id} className="border rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          {getPaymentMethodBadge(payment.paymentMethod)}
+                          {getStatusBadge(payment.paymentStatus)}
+                          <span className="font-mono text-sm text-gray-600">
+                            {payment.orderNumber}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-lg">
+                            KES {payment.totalAmount.toLocaleString()}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {format(new Date(payment.transactionDate || payment.createdAt), 'MMM dd, HH:mm')}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-600">Customer:</span>
+                          <div>{payment.customerName}</div>
+                          <div className="text-gray-500">{payment.customerPhone}</div>
+                        </div>
+                        
+                        <div>
+                          <span className="font-medium text-gray-600">Receipt:</span>
+                          <div className="flex items-center gap-2">
+                            {payment.mpesaReceiptNumber ? (
+                              <>
+                                <code className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                                  {payment.mpesaReceiptNumber}
+                                </code>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => navigator.clipboard.writeText(payment.mpesaReceiptNumber || '')}
+                                  title="Copy receipt number"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                </Button>
+                              </>
+                            ) : (
+                              <span className="text-gray-400">No receipt</span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <span className="font-medium text-gray-600">Status:</span>
+                          <div className="flex items-center gap-2">
+                            {payment.paymentStatus === 'paid' && (
+                              <>
+                                <CheckCircle className="w-4 h-4 text-green-600" />
+                                <span className="text-green-600">Completed</span>
+                              </>
+                            )}
+                            {payment.paymentStatus === 'pending' && (
+                              <>
+                                <Clock className="w-4 h-4 text-yellow-600" />
+                                <span className="text-yellow-600">Processing</span>
+                              </>
+                            )}
+                            {payment.paymentStatus === 'failed' && (
+                              <>
+                                <XCircle className="w-4 h-4 text-red-600" />
+                                <span className="text-red-600">Failed</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                
+                {filteredPayments.filter(p => p.paymentMethod.includes('mpesa')).length === 0 && (
+                  <div className="text-center py-8">
+                    <Smartphone className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500">No M-Pesa transactions found</p>
+                    <p className="text-sm text-gray-400">M-Pesa payments will appear here when customers pay</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </motion.div>
   );
 } 
