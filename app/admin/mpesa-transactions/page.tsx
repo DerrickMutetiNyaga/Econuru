@@ -403,7 +403,11 @@ export default function MpesaTransactionsPage() {
                           <TableCell className="font-medium">
                             {transaction.customerName}
                           </TableCell>
-                          <TableCell>{transaction.phoneNumber}</TableCell>
+                          <TableCell>
+                            <div className="font-mono text-sm">
+                              {transaction.phoneNumber}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <div className="font-medium text-green-600">
                               KES {transaction.amountPaid.toLocaleString()}
@@ -459,7 +463,7 @@ export default function MpesaTransactionsPage() {
 
       {/* Connection Dialog */}
       <Dialog open={connectionDialogOpen} onOpenChange={setConnectionDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <Link2 className="w-5 h-5 text-blue-600" />
@@ -479,10 +483,10 @@ export default function MpesaTransactionsPage() {
                     <span className="text-sm font-medium text-gray-700">Customer:</span>
                     <span className="text-sm font-bold text-gray-900">{selectedTransaction.customerName}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm font-medium text-gray-700">Phone:</span>
-                    <span className="text-sm font-bold text-gray-900">{selectedTransaction.phoneNumber}</span>
-                  </div>
+                                     <div className="flex justify-between">
+                     <span className="text-sm font-medium text-gray-700">Phone:</span>
+                     <span className="text-sm font-bold text-gray-900 font-mono">{selectedTransaction.phoneNumber}</span>
+                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-700">Amount:</span>
                     <span className="text-sm font-bold text-green-600">KES {selectedTransaction.amountPaid.toLocaleString()}</span>
@@ -494,29 +498,33 @@ export default function MpesaTransactionsPage() {
                 </div>
               </div>
 
-              {/* Order Selection */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Order
-                </label>
-                <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose an order..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {orders
-                      .filter(order => order.paymentStatus !== 'paid')
-                      .map((order) => (
-                        <SelectItem key={order._id} value={order._id}>
-                          {order.orderNumber} - {order.customer.name} - KES {(order.remainingBalance || order.totalAmount).toLocaleString()}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-gray-500">
-                  Only showing orders that are not fully paid
-                </p>
-              </div>
+                             {/* Order Selection */}
+               <div className="space-y-2">
+                 <label className="block text-sm font-medium text-gray-700">
+                   Select Order
+                 </label>
+                 <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
+                   <SelectTrigger className="w-full">
+                     <SelectValue placeholder="Choose an order..." />
+                   </SelectTrigger>
+                   <SelectContent className="max-h-[200px] overflow-y-auto">
+                     {orders
+                       .filter(order => order.paymentStatus !== 'paid')
+                       .map((order) => (
+                         <SelectItem key={order._id} value={order._id} className="text-sm">
+                           <div className="flex flex-col">
+                             <span className="font-medium">{order.orderNumber}</span>
+                             <span className="text-xs text-gray-500">{order.customer.name}</span>
+                             <span className="text-xs text-green-600">KES {(order.remainingBalance || order.totalAmount).toLocaleString()}</span>
+                           </div>
+                         </SelectItem>
+                       ))}
+                   </SelectContent>
+                 </Select>
+                 <p className="text-xs text-gray-500">
+                   Only showing orders that are not fully paid
+                 </p>
+               </div>
             </div>
           )}
 

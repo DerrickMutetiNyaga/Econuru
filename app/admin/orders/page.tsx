@@ -1699,10 +1699,10 @@ export default function OrdersPage() {
                             handleInitiatePayment(order);
                           }}
                           disabled={initiatingPayment}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                         >
                           {initiatingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
-                          {order.paymentStatus === 'partial' ? 'Request Balance' : 'Request Payment'}
+                          {order.paymentStatus === 'partial' ? 'Ksh Request Balance' : 'Ksh Request Payment'}
                         </Button>
                       )}
                       {order.paymentStatus === 'pending' && order.mpesaPayment?.checkoutRequestId && (
@@ -1856,10 +1856,11 @@ export default function OrdersPage() {
                               handleInitiatePayment(order);
                             }}
                             disabled={initiatingPayment}
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
-                            title={order.paymentStatus === 'partial' ? 'Request Balance Payment' : 'Request Payment'}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            title={order.paymentStatus === 'partial' ? 'Ksh Request Balance Payment' : 'Ksh Request Payment'}
                           >
                             {initiatingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
+                            <span className="ml-1 hidden sm:inline">Ksh</span>
                           </Button>
                         )}
                         {order.paymentStatus === 'pending' && order.mpesaPayment?.checkoutRequestId && (
