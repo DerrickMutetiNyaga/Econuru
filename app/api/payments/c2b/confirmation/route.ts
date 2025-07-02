@@ -10,33 +10,36 @@ export async function POST(request: NextRequest) {
     
     console.log('💰 C2B Confirmation Request received:', JSON.stringify(confirmationData, null, 2));
 
-    // Extract confirmation data
+    // Extract confirmation data (using exact M-Pesa field names)
     const {
-      transactionType,
-      transID,
-      transTime,
-      transAmount,
-      businessShortCode,
-      billRefNumber,
-      orgAccountBalance,
-      thirdPartyTransID,
-      msisdn,
-      firstName,
-      middleName,
-      lastName
+      TransactionType: transactionType,
+      TransID: transID,
+      TransTime: transTime,
+      TransAmount: transAmount,
+      BusinessShortCode: businessShortCode,
+      BillRefNumber: billRefNumber,
+      OrgAccountBalance: orgAccountBalance,
+      ThirdPartyTransID: thirdPartyTransID,
+      MSISDN: msisdn,
+      FirstName: firstName,
+      MiddleName: middleName,
+      LastName: lastName
     } = confirmationData;
 
-    const amount = parseFloat(transAmount);
+    const amount = parseFloat(String(transAmount)) || 0;
     
     // Connect to database
     await connectDB();
 
-    // Format customer phone number
-    let formattedPhone = msisdn;
-    if (msisdn && msisdn.replace) {
+    // Format customer phone number (handle encrypted MSISDN in production)
+    let formattedPhone = '0700000000'; // Default for encrypted numbers
+    if (msisdn && typeof msisdn === 'string' && !msisdn.includes('e') && msisdn.length < 20) {
+      // Only process if it looks like a real phone number (not encrypted)
       formattedPhone = msisdn.replace(/\D/g, '');
       if (formattedPhone.startsWith('254')) {
         formattedPhone = '0' + formattedPhone.substring(3);
+      } else if (!formattedPhone.startsWith('0')) {
+        formattedPhone = '0' + formattedPhone;
       }
     }
 
@@ -155,19 +158,26 @@ export async function POST(request: NextRequest) {
         
         const newOrder = new Order({
           orderNumber: orderNumber,
-          customerName: customerName,
-          customerPhone: formattedPhone,
-          customerEmail: '',
+          customer: {
+            name: customerName,
+            phone: formattedPhone,
+            email: '',
+            address: ''
+          },
           services: [{
-            name: 'C2B Payment',
-            price: amount,
-            quantity: 1
+            serviceId: 'c2b-payment',
+            serviceName: 'C2B Payment',
+            quantity: 1,
+            price: amount.toString()
           }],
-          subtotal: amount,
-          total: amount,
-          paymentMethod: 'mpesa_c2b',
+          location: 'main-branch',
+          totalAmount: amount,
+          pickDropAmount: 0,
+          discount: 0,
           paymentStatus: 'paid',
-          status: 'pending', // Admin will need to process this
+          laundryStatus: 'to-be-picked',
+          status: 'pending',
+          paymentMethod: 'mpesa_c2b',
           c2bPayment: {
             transactionId: transID,
             mpesaReceiptNumber: transID,
@@ -181,13 +191,17 @@ export async function POST(request: NextRequest) {
             customerName: customerName,
             paymentCompletedAt: new Date()
           },
-          notes: `Standalone C2B payment. Receipt: ${transID}`
+          notes: `Standalone C2B payment. Receipt: ${transID}. Customer: ${customerName}`,
+          createdAt: new Date(),
+          updatedAt: new Date()
         });
 
         await newOrder.save();
+        orderUpdated = true;
         console.log(`✅ Standalone C2B payment order created: ${orderNumber}`);
       } catch (error) {
         console.error('Error creating standalone payment order:', error);
+        console.error('Error details:', error.message);
       }
     }
 
