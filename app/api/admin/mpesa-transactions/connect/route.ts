@@ -64,10 +64,13 @@ export async function POST(request: NextRequest) {
     // Only mark as 'paid' if exact amount is received
     const paymentStatus = isExactPayment ? 'paid' : 'partially_paid';
 
+    // Determine payment method based on transaction type
+    const paymentMethod = transaction.transactionType === 'STK_PUSH' ? 'mpesa_stk' : 'mpesa_c2b';
+
     // Update the order with payment details
     await Order.findByIdAndUpdate(orderId, {
       paymentStatus: paymentStatus,
-      paymentMethod: 'mpesa_c2b',
+      paymentMethod: paymentMethod,
       $set: {
         'c2bPayment': {
           transactionId: transaction.transactionId,

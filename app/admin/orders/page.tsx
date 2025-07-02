@@ -32,6 +32,7 @@ import {
   CalendarCheck,
   Grid3X3,
   List,
+  Link2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -133,6 +134,13 @@ export default function OrdersPage() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [initiatingPayment, setInitiatingPayment] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
+  // Manual payment connection states
+  const [manualPaymentDialogOpen, setManualPaymentDialogOpen] = useState(false);
+  const [orderForManualPayment, setOrderForManualPayment] = useState<Order | null>(null);
+  const [manualPaymentAmount, setManualPaymentAmount] = useState('');
+  const [searchingPayments, setSearchingPayments] = useState(false);
+  const [multipleTransactions, setMultipleTransactions] = useState<any[]>([]);
+  const [multipleTransactionsDialogOpen, setMultipleTransactionsDialogOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -561,6 +569,161 @@ export default function OrdersPage() {
       });
     } finally {
       setCheckingPayment(false);
+    }
+  };
+
+  // Manual payment connection functions
+  const handleManualPaymentSearch = (order: Order) => {
+    setOrderForManualPayment(order);
+    setManualPaymentAmount('');
+    setMultipleTransactions([]);
+    setManualPaymentDialogOpen(true);
+  };
+
+  const searchPaymentByAmount = async () => {
+    if (!orderForManualPayment || !manualPaymentAmount) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please enter a payment amount to search',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setSearchingPayments(true);
+      const response = await fetch('/api/admin/orders/connect-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          orderId: orderForManualPayment._id,
+          paymentAmount: parseFloat(manualPaymentAmount),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.autoConnected) {
+        // Single transaction found and auto-connected
+        toast({
+          title: 'Payment Connected',
+          description: data.message,
+          variant: 'default',
+        });
+
+        // Update order in local state
+        setOrders(prevOrders =>
+          prevOrders.map(o =>
+            o._id === orderForManualPayment._id
+              ? { ...o, paymentStatus: data.paymentStatus, amountPaid: data.transaction.amount }
+              : o
+          )
+        );
+
+        // Update selected order if it's the same one
+        if (selectedOrder?._id === orderForManualPayment._id) {
+          setSelectedOrder({
+            ...selectedOrder,
+            paymentStatus: data.paymentStatus,
+            amountPaid: data.transaction.amount
+          });
+        }
+
+        setManualPaymentDialogOpen(false);
+        setOrderForManualPayment(null);
+        setManualPaymentAmount('');
+      } else if (data.multipleMatches) {
+        // Multiple transactions found - show selection dialog
+        setMultipleTransactions(data.transactions);
+        setManualPaymentDialogOpen(false);
+        setMultipleTransactionsDialogOpen(true);
+      } else {
+        // No transactions found
+        toast({
+          title: 'No Transactions Found',
+          description: data.message,
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error searching payments:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to search for payments',
+        variant: 'destructive',
+      });
+    } finally {
+      setSearchingPayments(false);
+    }
+  };
+
+  const connectSpecificTransaction = async (transactionId: string) => {
+    if (!orderForManualPayment) return;
+
+    try {
+      setSearchingPayments(true);
+      const response = await fetch('/api/admin/mpesa-transactions/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          transactionId: transactionId,
+          orderId: orderForManualPayment._id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: 'Payment Connected',
+          description: data.message,
+          variant: 'default',
+        });
+
+        // Update order in local state
+        setOrders(prevOrders =>
+          prevOrders.map(o =>
+            o._id === orderForManualPayment._id
+              ? { ...o, paymentStatus: data.isExactPayment ? 'paid' : 'partially_paid', amountPaid: data.amountPaid }
+              : o
+          )
+        );
+
+        // Update selected order if it's the same one
+        if (selectedOrder?._id === orderForManualPayment._id) {
+          setSelectedOrder({
+            ...selectedOrder,
+            paymentStatus: data.isExactPayment ? 'paid' : 'partially_paid',
+            amountPaid: data.amountPaid
+          });
+        }
+
+        setMultipleTransactionsDialogOpen(false);
+        setOrderForManualPayment(null);
+        setManualPaymentAmount('');
+        setMultipleTransactions([]);
+      } else {
+        toast({
+          title: 'Connection Failed',
+          description: data.error || 'Failed to connect transaction',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error connecting transaction:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to connect transaction',
+        variant: 'destructive',
+      });
+    } finally {
+      setSearchingPayments(false);
     }
   };
 
@@ -1902,6 +2065,31 @@ export default function OrdersPage() {
                         <span className="text-mint-green">Ksh {(selectedOrder.totalAmount || 0).toLocaleString()}</span>
                       </div>
                     </div>
+                    
+                    {/* Manual Payment Connection - Show for unpaid or partially paid orders */}
+                    {((selectedOrder.paymentStatus || 'unpaid') === 'unpaid' || 
+                      (selectedOrder.paymentStatus || 'unpaid') === 'partially_paid') && (
+                      <div className="border-t pt-3">
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h6 className="text-sm font-medium text-orange-800">Manual Payment Connection</h6>
+                              <p className="text-xs text-orange-600 mt-1">
+                                Search for M-Pesa transactions by amount and connect them to this order
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => handleManualPaymentSearch(selectedOrder)}
+                              className="bg-orange-600 hover:bg-orange-700 text-white flex items-center gap-2"
+                            >
+                              <Link2 className="w-4 h-4" />
+                              Connect Payment
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -2222,6 +2410,214 @@ export default function OrdersPage() {
                   Send STK Push
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Payment Search Dialog */}
+      <Dialog open={manualPaymentDialogOpen} onOpenChange={setManualPaymentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-orange-600" />
+              Connect Manual Payment
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Enter the amount paid to search for matching M-Pesa transactions
+            </DialogDescription>
+          </DialogHeader>
+
+          {orderForManualPayment && (
+            <div className="space-y-4">
+              {/* Order Details */}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Order:</span>
+                    <span className="text-sm font-bold text-gray-900">{orderForManualPayment.orderNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Customer:</span>
+                    <span className="text-sm font-bold text-gray-900">{orderForManualPayment.customer.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Order Total:</span>
+                    <span className="text-sm font-bold text-gray-900">Ksh {orderForManualPayment.totalAmount.toLocaleString()}</span>
+                  </div>
+                  {orderForManualPayment.amountPaid && (
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-700">Already Paid:</span>
+                      <span className="text-sm font-bold text-green-600">Ksh {orderForManualPayment.amountPaid.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment Search Form */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Payment Amount (Ksh)
+                  </label>
+                  <Input
+                    type="number"
+                    value={manualPaymentAmount}
+                    onChange={(e) => setManualPaymentAmount(e.target.value)}
+                    placeholder="Enter the amount the customer paid"
+                    min="1"
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter the exact amount that appears in the M-Pesa transaction
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <h6 className="text-sm font-medium text-blue-800 mb-1">How it works:</h6>
+                <ul className="text-xs text-blue-600 space-y-1">
+                  <li>• Enter the amount the customer paid via M-Pesa</li>
+                  <li>• System will search for unconnected transactions with that amount</li>
+                  <li>• If one match found, it will be auto-connected</li>
+                  <li>• If multiple matches found, you can choose the correct one</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setManualPaymentDialogOpen(false);
+                setOrderForManualPayment(null);
+                setManualPaymentAmount('');
+              }}
+              disabled={searchingPayments}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={searchPaymentByAmount}
+              disabled={searchingPayments || !manualPaymentAmount}
+              className="bg-orange-600 hover:bg-orange-700 text-white flex items-center gap-2"
+            >
+              {searchingPayments ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Link2 className="w-4 h-4" />
+                  Search & Connect
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Multiple Transactions Selection Dialog */}
+      <Dialog open={multipleTransactionsDialogOpen} onOpenChange={setMultipleTransactionsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-orange-600" />
+              Multiple Transactions Found
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Multiple M-Pesa transactions found with amount KES {manualPaymentAmount}. Please select the correct one.
+            </DialogDescription>
+          </DialogHeader>
+
+          {orderForManualPayment && (
+            <div className="space-y-4">
+              {/* Order Summary */}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <h6 className="text-sm font-medium text-orange-800 mb-1">
+                  Connecting to Order: {orderForManualPayment.orderNumber}
+                </h6>
+                <p className="text-xs text-orange-600">
+                  Customer: {orderForManualPayment.customer.name} • Total: KES {orderForManualPayment.totalAmount.toLocaleString()}
+                </p>
+              </div>
+
+              {/* Transactions List */}
+              <div className="space-y-3">
+                <h6 className="text-sm font-medium text-gray-700">Available Transactions:</h6>
+                {multipleTransactions.map((transaction, index) => (
+                  <div 
+                    key={transaction._id}
+                    className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 hover:bg-gray-100"
+                  >
+                    <div className="flex-1">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <strong>Transaction ID:</strong>
+                          <div className="font-mono text-blue-600">{transaction.id}</div>
+                        </div>
+                        <div>
+                          <strong>Amount:</strong>
+                          <div className="font-bold text-green-600">KES {transaction.amountPaid.toLocaleString()}</div>
+                        </div>
+                        <div>
+                          <strong>Customer:</strong>
+                          <div>{transaction.customerName}</div>
+                        </div>
+                        <div>
+                          <strong>Phone:</strong>
+                          <div className="font-mono">{transaction.phoneNumber}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <strong>Date:</strong>
+                          <div>{new Date(transaction.transactionDate).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <strong>Type:</strong>
+                          <Badge variant="outline" className="ml-2">
+                            {transaction.transactionType === 'STK_PUSH' ? 'STK Push' : 'C2B Payment'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => connectSpecificTransaction(transaction.id)}
+                      disabled={searchingPayments}
+                      className="bg-orange-600 hover:bg-orange-700 text-white ml-4"
+                    >
+                      {searchingPayments ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        'Connect This'
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setMultipleTransactionsDialogOpen(false);
+                setOrderForManualPayment(null);
+                setManualPaymentAmount('');
+                setMultipleTransactions([]);
+              }}
+              disabled={searchingPayments}
+            >
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

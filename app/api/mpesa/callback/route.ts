@@ -79,77 +79,117 @@ export async function POST(request: NextRequest) {
         transactionDateObj = new Date(year, month, day, hour, minute, second);
       }
 
-      // Check if payment amount matches order total exactly (strict comparison)
+      // Get the requested payment amount from pending payment data
+      const requestedAmount = order.pendingMpesaPayment?.amount || order.totalAmount || 0;
       const orderTotal = order.totalAmount || 0;
       const amountPaid = parseFloat(amount) || 0;
-      const isExactPayment = amountPaid === orderTotal;
+      
+      // Check if the payment matches what was requested (not necessarily the full order amount)
+      const isRequestedAmountPaid = amountPaid === parseFloat(requestedAmount);
+      const isFullOrderPayment = amountPaid === orderTotal;
       const isPartialPayment = amountPaid < orderTotal;
       const isOverPayment = amountPaid > orderTotal;
-      
-      // Only mark as 'paid' if exact amount is received
-      const paymentStatus = isExactPayment ? 'paid' : 'partially_paid';
 
-      // Store the transaction in MpesaTransaction collection
-      try {
-        const mpesaTransaction = new MpesaTransaction({
-          transactionId: mpesaReceiptNumber,
-          mpesaReceiptNumber: mpesaReceiptNumber,
-          transactionDate: transactionDateObj || new Date(),
-          phoneNumber: phoneNumber || 'Unknown',
-          amountPaid: amountPaid,
-          transactionType: 'STK_PUSH',
-          billRefNumber: order.orderNumber,
-          customerName: order.customer?.name || 'STK Push Customer',
-          paymentCompletedAt: new Date(),
-          isConnectedToOrder: true,
-          connectedOrderId: order._id,
-          connectedAt: new Date(),
-          connectedBy: 'system_auto_match',
-          notes: `STK Push payment for order ${order.orderNumber}. ${
-            isExactPayment ? 'Full payment received' : 
-            isOverPayment ? `Overpayment: KES ${amountPaid} (expected KES ${orderTotal})` :
-            `Partial payment: KES ${amountPaid} of KES ${orderTotal}`
-          }`
-        });
+      // Log original phone number from Safaricom
+      console.log(`📱 STK Push - Phone number received from Safaricom: ${phoneNumber || 'Unknown'}`);
+      console.log(`💰 Payment Analysis: Requested=${requestedAmount}, Paid=${amountPaid}, OrderTotal=${orderTotal}`);
 
-        await mpesaTransaction.save();
-        console.log(`💾 STK Push transaction stored: ${mpesaReceiptNumber} (KES ${amountPaid})`);
-      } catch (transactionError) {
-        console.error('Error storing STK Push transaction:', transactionError);
-      }
+      if (isRequestedAmountPaid) {
+        // REQUESTED AMOUNT PAID: Auto-connect and determine payment status based on math
+        try {
+          // Determine payment status based on order completion
+          const paymentStatus = isFullOrderPayment ? 'paid' : 'partially_paid';
+          
+          const mpesaTransaction = new MpesaTransaction({
+            transactionId: mpesaReceiptNumber,
+            mpesaReceiptNumber: mpesaReceiptNumber,
+            transactionDate: transactionDateObj || new Date(),
+            phoneNumber: phoneNumber || 'Unknown', // Save exactly as received from Safaricom
+            amountPaid: amountPaid,
+            transactionType: 'STK_PUSH',
+            billRefNumber: order.orderNumber,
+            customerName: order.customer?.name || 'STK Push Customer',
+            paymentCompletedAt: new Date(),
+            isConnectedToOrder: true,
+            connectedOrderId: order._id,
+            connectedAt: new Date(),
+            connectedBy: 'system_auto_match',
+            notes: `STK Push payment for order ${order.orderNumber}. ${
+              isFullOrderPayment ? `Full payment received (KES ${amountPaid})` :
+              isOverPayment ? `Overpayment received (KES ${amountPaid} for KES ${orderTotal} order)` :
+              `Partial payment received (KES ${amountPaid} of KES ${orderTotal} order total)`
+            }`
+          });
 
-      // Update order with payment details
-      const orderUpdate: any = {
-        paymentMethod: 'mpesa_stk',
-        mpesaReceiptNumber: mpesaReceiptNumber,
-        transactionDate: transactionDateObj,
-        phoneNumber: phoneNumber,
-        amountPaid: amountPaid,
-        resultCode: resultCode,
-        resultDescription: resultDesc,
-        paymentCompletedAt: new Date(),
-        $set: {
-          'mpesaPayment.mpesaReceiptNumber': mpesaReceiptNumber,
-          'mpesaPayment.transactionDate': transactionDateObj,
-          'mpesaPayment.phoneNumber': phoneNumber,
-          'mpesaPayment.amountPaid': amountPaid,
-          'mpesaPayment.resultCode': resultCode,
-          'mpesaPayment.resultDescription': resultDesc,
-          'mpesaPayment.paymentCompletedAt': new Date()
+          await mpesaTransaction.save();
+
+          // Update order with payment details and calculated status
+          await Order.findByIdAndUpdate(order._id, {
+            paymentStatus: paymentStatus,
+            paymentMethod: 'mpesa_stk',
+            mpesaReceiptNumber: mpesaReceiptNumber,
+            transactionDate: transactionDateObj,
+            phoneNumber: phoneNumber,
+            amountPaid: amountPaid,
+            resultCode: resultCode,
+            resultDescription: resultDesc,
+            paymentCompletedAt: new Date(),
+            $set: {
+              'mpesaPayment.mpesaReceiptNumber': mpesaReceiptNumber,
+              'mpesaPayment.transactionDate': transactionDateObj,
+              'mpesaPayment.phoneNumber': phoneNumber,
+              'mpesaPayment.amountPaid': amountPaid,
+              'mpesaPayment.resultCode': resultCode,
+              'mpesaPayment.resultDescription': resultDesc,
+              'mpesaPayment.paymentCompletedAt': new Date()
+            }
+          });
+
+          if (isFullOrderPayment) {
+            console.log(`✅ FULL payment received for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid}) - Order marked as PAID`);
+          } else if (isOverPayment) {
+            console.log(`💰 OVERPAYMENT received for order ${order.orderNumber}: KES ${amountPaid} (expected KES ${orderTotal}) - Receipt: ${mpesaReceiptNumber} - Order marked as PAID`);
+          } else {
+            console.log(`⚠️ PARTIAL payment received for order ${order.orderNumber}: KES ${amountPaid} of KES ${orderTotal} (Receipt: ${mpesaReceiptNumber}) - Order marked as PARTIALLY PAID`);
+          }
+        } catch (transactionError) {
+          console.error('Error storing STK Push transaction:', transactionError);
         }
-      };
+              } else {
+        // PAYMENT AMOUNT MISMATCH: Create standalone transaction for manual review
+        try {
+          const mpesaTransaction = new MpesaTransaction({
+            transactionId: mpesaReceiptNumber,
+            mpesaReceiptNumber: mpesaReceiptNumber,
+            transactionDate: transactionDateObj || new Date(),
+            phoneNumber: phoneNumber || 'Unknown', // Save exactly as received from Safaricom
+            amountPaid: amountPaid,
+            transactionType: 'STK_PUSH',
+            billRefNumber: order.orderNumber,
+            customerName: order.customer?.name || 'STK Push Customer',
+            paymentCompletedAt: new Date(),
+            isConnectedToOrder: false, // NOT connected - requires manual connection
+            notes: `STK Push payment mismatch for order ${order.orderNumber}. Requested: KES ${requestedAmount}, Paid: KES ${amountPaid}, Order Total: KES ${orderTotal}. Requires manual connection via admin dashboard.`
+          });
 
-      // Set payment status based on amount comparison
-      orderUpdate.paymentStatus = paymentStatus;
+          await mpesaTransaction.save();
 
-      await Order.findByIdAndUpdate(order._id, orderUpdate);
+          // Update order basic payment info but KEEP as unpaid
+          await Order.findByIdAndUpdate(order._id, {
+            resultCode: resultCode,
+            resultDescription: resultDesc,
+            $set: {
+              'mpesaPayment.resultCode': resultCode,
+              'mpesaPayment.resultDescription': resultDesc,
+              'mpesaPayment.paymentCompletedAt': new Date()
+            }
+          });
 
-      if (isExactPayment) {
-        console.log(`✅ EXACT payment received for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid})`);
-      } else if (isOverPayment) {
-        console.log(`💰 OVERPAYMENT received for order ${order.orderNumber}: KES ${amountPaid} (expected KES ${orderTotal}) - Receipt: ${mpesaReceiptNumber}`);
-      } else {
-        console.log(`⚠️ PARTIAL payment received for order ${order.orderNumber}: KES ${amountPaid} of KES ${orderTotal} (Receipt: ${mpesaReceiptNumber})`);
+          console.log(`🔍 STK Push AMOUNT MISMATCH for order ${order.orderNumber}: Requested KES ${requestedAmount}, Paid KES ${amountPaid} - Receipt: ${mpesaReceiptNumber}`);
+          console.log(`🔗 Transaction created as standalone. Order remains UNPAID until manual connection via admin dashboard.`);
+        } catch (transactionError) {
+          console.error('Error storing standalone STK Push transaction:', transactionError);
+        }
       }
 
     } else {

@@ -32,10 +32,14 @@ export async function POST(request: NextRequest) {
     // Connect to database
     await connectDB();
 
-    // Format customer phone number (handle encrypted MSISDN in production)
-    let formattedPhone = '0700000000'; // Default for encrypted numbers
+    // Save phone number exactly as received from Safaricom (preserve encrypted/hashed format)
+    const originalPhone = msisdn || 'Unknown';
+    console.log(`📱 Phone number received from Safaricom: ${originalPhone}`);
+    
+    // For customer search/matching, create a formatted version if possible
+    let formattedPhone = originalPhone;
     if (msisdn && typeof msisdn === 'string' && !msisdn.includes('e') && msisdn.length < 20) {
-      // Only process if it looks like a real phone number (not encrypted)
+      // Only format if it looks like a real phone number (not encrypted)
       formattedPhone = msisdn.replace(/\D/g, '');
       if (formattedPhone.startsWith('254')) {
         formattedPhone = '0' + formattedPhone.substring(3);
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
                 transactionId: transID,
                 mpesaReceiptNumber: transID, // M-Pesa receipt is the transID for C2B
                 transactionDate: transactionDate,
-                phoneNumber: formattedPhone,
+                phoneNumber: originalPhone,
                 amountPaid: amount,
                 transactionType: transactionType,
                 billRefNumber: billRefNumber,
@@ -199,7 +203,7 @@ export async function POST(request: NextRequest) {
                 transactionId: transID,
                 mpesaReceiptNumber: transID,
                 transactionDate: transactionDate,
-                phoneNumber: formattedPhone,
+                phoneNumber: originalPhone,
                 amountPaid: amount,
                 transactionType: transactionType,
                 billRefNumber: billRefNumber || 'TILL_PAYMENT',
@@ -251,7 +255,7 @@ export async function POST(request: NextRequest) {
             transactionId: transID,
             mpesaReceiptNumber: transID,
             transactionDate: transactionDate,
-            phoneNumber: formattedPhone,
+            phoneNumber: originalPhone,
             amountPaid: amount,
             transactionType: transactionType,
             billRefNumber: billRefNumber || 'TILL_PAYMENT',
