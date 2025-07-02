@@ -705,7 +705,7 @@ export default function PendingPaymentsPage() {
                 <>
                   <X className="w-4 h-4 mr-2" />
                   Reject Payment
-                </X>
+                </>
               )}
             </Button>
           </DialogFooter>
