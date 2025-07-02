@@ -112,7 +112,23 @@ export default function MpesaTransactionsPage() {
           console.log('🔍 DEBUG: First transaction data:', {
             phoneNumber: transactionsData.transactions[0].phoneNumber,
             transactionId: transactionsData.transactions[0].transactionId,
-            customerName: transactionsData.transactions[0].customerName
+            customerName: transactionsData.transactions[0].customerName,
+            isConnectedToOrder: transactionsData.transactions[0].isConnectedToOrder,
+            connectedOrderId: transactionsData.transactions[0].connectedOrderId
+          });
+        }
+        
+        // Debug: Log orders data
+        if (ordersData.orders && ordersData.orders.length > 0) {
+          console.log('🔍 DEBUG: Orders loaded:', {
+            totalOrders: ordersData.orders.length,
+            firstOrder: {
+              _id: ordersData.orders[0]._id,
+              orderNumber: ordersData.orders[0].orderNumber,
+              customer: ordersData.orders[0].customer?.name,
+              paymentStatus: ordersData.orders[0].paymentStatus
+            },
+            allOrderIds: ordersData.orders.map(o => ({ id: o._id, orderNumber: o.orderNumber })).slice(0, 5)
           });
         }
         
@@ -239,15 +255,30 @@ export default function MpesaTransactionsPage() {
   const getConnectedOrder = (transaction: MpesaTransaction) => {
     if (!transaction.connectedOrderId) return null;
     
-    const connectedOrder = orders.find(order => order._id === transaction.connectedOrderId);
+    // Convert ObjectId to string for comparison
+    const connectedOrderIdStr = String(transaction.connectedOrderId);
     
-    // Debug: Log if we can't find a connected order
+    const connectedOrder = orders.find(order => {
+      const orderIdStr = String(order._id);
+      return orderIdStr === connectedOrderIdStr;
+    });
+    
+    // Debug: Log detailed information
     if (!connectedOrder && transaction.isConnectedToOrder) {
       console.warn('🔍 Connected transaction missing order:', {
         transactionId: transaction.transactionId,
         connectedOrderId: transaction.connectedOrderId,
+        connectedOrderIdStr: connectedOrderIdStr,
         connectedOrderIdType: typeof transaction.connectedOrderId,
-        availableOrderIds: orders.map(o => o._id).slice(0, 5) // First 5 for debugging
+        totalOrdersLoaded: orders.length,
+        availableOrderIds: orders.map(o => ({ id: o._id, idStr: String(o._id), orderNumber: o.orderNumber })).slice(0, 5),
+        exactMatch: orders.find(o => String(o._id) === connectedOrderIdStr)
+      });
+    } else if (connectedOrder) {
+      console.log('✅ Found connected order:', {
+        transactionId: transaction.transactionId,
+        orderNumber: connectedOrder.orderNumber,
+        orderId: connectedOrder._id
       });
     }
     
