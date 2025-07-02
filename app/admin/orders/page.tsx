@@ -66,7 +66,8 @@ interface Order {
   totalAmount: number;
   pickDropAmount?: number;
   discount?: number;
-  paymentStatus?: 'unpaid' | 'paid' | 'partial' | 'pending' | 'failed';
+  paymentStatus?: 'unpaid' | 'paid' | 'partially_paid' | 'pending' | 'failed';
+  amountPaid?: number;
   laundryStatus?: 'to-be-picked' | 'picked' | 'in-progress' | 'ready' | 'delivered';
   status: 'pending' | 'confirmed' | 'in-progress' | 'ready' | 'delivered' | 'cancelled';
   createdAt: string;
@@ -1149,7 +1150,7 @@ export default function OrdersPage() {
                       <Badge className={`text-xs px-2 py-1 ${
                         (order.paymentStatus || 'unpaid') === 'paid' 
                           ? 'bg-green-100 text-green-800 border-green-200' 
-                          : (order.paymentStatus || 'unpaid') === 'partial'
+                          : (order.paymentStatus || 'unpaid') === 'partially_paid'
                           ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
                           : (order.paymentStatus || 'unpaid') === 'pending'
                           ? 'bg-blue-100 text-blue-800 border-blue-200'
@@ -1157,7 +1158,12 @@ export default function OrdersPage() {
                           ? 'bg-red-100 text-red-800 border-red-200'
                           : 'bg-gray-100 text-gray-800 border-gray-200'
                       }`}>
-                        {(order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
+                        {(order.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial' : (order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
+                        {(order.paymentStatus || 'unpaid') === 'partially_paid' && order.amountPaid && (
+                          <span className="ml-1 text-xs">
+                            ({order.amountPaid.toLocaleString()}/{order.totalAmount.toLocaleString()})
+                          </span>
+                        )}
                       </Badge>
                       {order.promoCode && (
                         <Badge className="bg-green-100 text-green-800 border-green-200 text-xs px-2 py-1 font-semibold shadow-sm flex items-center gap-1">
@@ -1295,7 +1301,7 @@ export default function OrdersPage() {
                           <Badge className={`text-xs px-2 py-1 ${
                             (order.paymentStatus || 'unpaid') === 'paid' 
                               ? 'bg-green-100 text-green-800 border-green-200' 
-                              : (order.paymentStatus || 'unpaid') === 'partial'
+                              : (order.paymentStatus || 'unpaid') === 'partially_paid'
                               ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
                               : (order.paymentStatus || 'unpaid') === 'pending'
                               ? 'bg-blue-100 text-blue-800 border-blue-200'
@@ -1303,8 +1309,13 @@ export default function OrdersPage() {
                               ? 'bg-red-100 text-red-800 border-red-200'
                               : 'bg-gray-100 text-gray-800 border-gray-200'
                           }`}>
-                            {(order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
+                            {(order.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial' : (order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
                           </Badge>
+                          {(order.paymentStatus || 'unpaid') === 'partially_paid' && order.amountPaid && (
+                            <div className="text-xs text-yellow-700 mt-1">
+                              KES {order.amountPaid.toLocaleString()} of KES {order.totalAmount.toLocaleString()}
+                            </div>
+                          )}
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-xs text-gray-600">Laundry:</span>
@@ -1414,7 +1425,7 @@ export default function OrdersPage() {
 
                     {/* Payment Actions */}
                     <div className="flex gap-2 pt-2">
-                      {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed') && (
+                      {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed' || order.paymentStatus === 'partially_paid') && (
                         <Button
                           size="sm"
                           onClick={(e) => {
@@ -1425,7 +1436,7 @@ export default function OrdersPage() {
                           className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           {initiatingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
-                          Request Payment
+                          {order.paymentStatus === 'partially_paid' ? 'Request Balance' : 'Request Payment'}
                         </Button>
                       )}
                       {order.paymentStatus === 'pending' && order.mpesaPayment?.checkoutRequestId && (
@@ -1517,11 +1528,20 @@ export default function OrdersPage() {
                           <Badge className={`text-xs px-2 py-1 ${
                             (order.paymentStatus || 'unpaid') === 'paid' 
                               ? 'bg-green-100 text-green-800 border-green-200' 
-                              : (order.paymentStatus || 'unpaid') === 'partial'
+                              : (order.paymentStatus || 'unpaid') === 'partially_paid'
                               ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                              : 'bg-red-100 text-red-800 border-red-200'
+                              : (order.paymentStatus || 'unpaid') === 'pending'
+                              ? 'bg-blue-100 text-blue-800 border-blue-200'
+                              : (order.paymentStatus || 'unpaid') === 'failed'
+                              ? 'bg-red-100 text-red-800 border-red-200'
+                              : 'bg-gray-100 text-gray-800 border-gray-200'
                           }`}>
-                            {(order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
+                            {(order.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial' : (order.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (order.paymentStatus || 'unpaid').slice(1)}
+                            {(order.paymentStatus || 'unpaid') === 'partially_paid' && order.amountPaid && (
+                              <span className="ml-1">
+                                ({order.amountPaid.toLocaleString()}/{order.totalAmount.toLocaleString()})
+                              </span>
+                            )}
                           </Badge>
                         </div>
 
@@ -1562,7 +1582,7 @@ export default function OrdersPage() {
                         )}
                         
                         {/* Payment Actions */}
-                        {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed') && (
+                        {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed' || order.paymentStatus === 'partially_paid') && (
                           <Button
                             size="sm"
                             onClick={(e) => {
@@ -1571,6 +1591,7 @@ export default function OrdersPage() {
                             }}
                             disabled={initiatingPayment}
                             className="bg-blue-600 hover:bg-blue-700 text-white"
+                            title={order.paymentStatus === 'partially_paid' ? 'Request Balance Payment' : 'Request Payment'}
                           >
                             {initiatingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
                           </Button>
@@ -1725,11 +1746,20 @@ export default function OrdersPage() {
                     <Badge className={`${
                       (selectedOrder.paymentStatus || 'unpaid') === 'paid' 
                         ? 'bg-green-100 text-green-800 border-green-200' 
-                        : (selectedOrder.paymentStatus || 'unpaid') === 'partial'
+                        : (selectedOrder.paymentStatus || 'unpaid') === 'partially_paid'
                         ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                        : 'bg-red-100 text-red-800 border-red-200'
+                        : (selectedOrder.paymentStatus || 'unpaid') === 'pending'
+                        ? 'bg-blue-100 text-blue-800 border-blue-200'
+                        : (selectedOrder.paymentStatus || 'unpaid') === 'failed'
+                        ? 'bg-red-100 text-red-800 border-red-200'
+                        : 'bg-gray-100 text-gray-800 border-gray-200'
                     }`}>
-                      {(selectedOrder.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (selectedOrder.paymentStatus || 'unpaid').slice(1)}
+                      {(selectedOrder.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial Payment' : (selectedOrder.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (selectedOrder.paymentStatus || 'unpaid').slice(1)}
+                      {(selectedOrder.paymentStatus || 'unpaid') === 'partially_paid' && selectedOrder.amountPaid && (
+                        <span className="ml-2 text-xs">
+                          (KES {selectedOrder.amountPaid.toLocaleString()}/{selectedOrder.totalAmount.toLocaleString()})
+                        </span>
+                      )}
                     </Badge>
                   </div>
                 </div>
@@ -1852,12 +1882,23 @@ export default function OrdersPage() {
                       <Badge className={`${
                         (selectedOrder.paymentStatus || 'unpaid') === 'paid' 
                           ? 'bg-green-100 text-green-800 border-green-200' 
-                          : (selectedOrder.paymentStatus || 'unpaid') === 'partial'
+                          : (selectedOrder.paymentStatus || 'unpaid') === 'partially_paid'
                           ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                          : 'bg-red-100 text-red-800 border-red-200'
+                          : (selectedOrder.paymentStatus || 'unpaid') === 'pending'
+                          ? 'bg-blue-100 text-blue-800 border-blue-200'
+                          : (selectedOrder.paymentStatus || 'unpaid') === 'failed'
+                          ? 'bg-red-100 text-red-800 border-red-200'
+                          : 'bg-gray-100 text-gray-800 border-gray-200'
                       }`}>
-                        {(selectedOrder.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (selectedOrder.paymentStatus || 'unpaid').slice(1)}
+                        {(selectedOrder.paymentStatus || 'unpaid') === 'partially_paid' ? 'Partial Payment' : (selectedOrder.paymentStatus || 'unpaid').charAt(0).toUpperCase() + (selectedOrder.paymentStatus || 'unpaid').slice(1)}
                       </Badge>
+                      {(selectedOrder.paymentStatus || 'unpaid') === 'partially_paid' && selectedOrder.amountPaid && (
+                        <div className="text-sm text-yellow-700 mt-2">
+                          <strong>Amount Paid:</strong> KES {selectedOrder.amountPaid.toLocaleString()} of KES {selectedOrder.totalAmount.toLocaleString()}
+                          <br />
+                          <strong>Outstanding:</strong> KES {(selectedOrder.totalAmount - selectedOrder.amountPaid).toLocaleString()}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <h5 className="text-sm text-gray-500">Laundry Status</h5>

@@ -372,60 +372,64 @@ export default function MpesaTransactionsPage() {
                       </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm mb-3">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm mb-3">
+                    <div>
+                      <span className="font-medium text-gray-600">Transaction ID:</span>
+                      <div className="font-mono text-blue-700 font-bold">
+                        {transaction.transactionId}
+                      </div>
+                      <div className="text-xs text-gray-500">M-Pesa Receipt</div>
+                    </div>
+
                     <div>
                       <span className="font-medium text-gray-600">Customer:</span>
-                      <div>{transaction.customerName}</div>
-                      <div className="text-gray-500">{transaction.phoneNumber}</div>
+                      <div className="font-semibold">{transaction.customerName}</div>
+                      <div className="text-gray-500 font-mono">{transaction.phoneNumber}</div>
                     </div>
-                    
+
                     <div>
-                      <span className="font-medium text-gray-600">Receipt:</span>
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
-                          {transaction.mpesaReceiptNumber}
-                        </code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => navigator.clipboard.writeText(transaction.mpesaReceiptNumber)}
-                          title="Copy receipt number"
-                        >
-                          <Eye className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <span className="font-medium text-gray-600">Status:</span>
+                      <span className="font-medium text-gray-600">Order Number:</span>
                       <div>
                         {transaction.isConnectedToOrder ? (
-                          <div className="text-green-600">
-                            Connected to {transaction.connectedOrderId?.orderNumber}
+                          <div className="flex flex-col">
+                            <span className="font-bold text-blue-600">
+                              {transaction.connectedOrderId?.orderNumber}
+                            </span>
+                            <span className="text-xs text-green-600">Connected</span>
                           </div>
                         ) : (
-                          <div className="text-orange-600">
-                            Awaiting connection
+                          <div className="flex flex-col">
+                            <span className="text-orange-600 font-medium">Not Connected</span>
+                            <span className="text-xs text-gray-500">Needs connection</span>
                           </div>
                         )}
                       </div>
                     </div>
+
+                    <div>
+                      <span className="font-medium text-gray-600">Amount Paid:</span>
+                      <div className="font-bold text-green-700 text-lg">
+                        KES {transaction.amountPaid.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {format(new Date(transaction.transactionDate), 'MMM dd, HH:mm')}
+                      </div>
+                    </div>
                     
-                    <div className="flex justify-end">
-                      {!transaction.isConnectedToOrder && (
+                    <div className="flex justify-end items-center">
+                      {!transaction.isConnectedToOrder ? (
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button 
                               size="sm" 
                               onClick={() => setSelectedTransaction(transaction)}
-                              className="gap-2"
+                              className="gap-2 bg-orange-600 hover:bg-orange-700"
                             >
                               <Link2 className="w-4 h-4" />
                               Connect to Order
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent className="max-w-2xl">
                             <DialogHeader>
                               <DialogTitle>Connect M-Pesa Transaction</DialogTitle>
                               <DialogDescription>
@@ -433,53 +437,88 @@ export default function MpesaTransactionsPage() {
                               </DialogDescription>
                             </DialogHeader>
                             <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                  <strong>Customer:</strong> {transaction.customerName}
-                                </div>
-                                <div>
-                                  <strong>Amount:</strong> KES {transaction.amountPaid.toLocaleString()}
-                                </div>
-                                <div>
-                                  <strong>Phone:</strong> {transaction.phoneNumber}
-                                </div>
-                                <div>
-                                  <strong>Date:</strong> {format(new Date(transaction.transactionDate), 'MMM dd, yyyy HH:mm')}
+                              <div className="bg-blue-50 p-4 rounded-lg">
+                                <h4 className="font-semibold mb-2 text-blue-800">Transaction Details:</h4>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <strong>Transaction ID:</strong> {transaction.transactionId}
+                                  </div>
+                                  <div>
+                                    <strong>Amount Paid:</strong> KES {transaction.amountPaid.toLocaleString()}
+                                  </div>
+                                  <div>
+                                    <strong>Customer Name:</strong> {transaction.customerName}
+                                  </div>
+                                  <div>
+                                    <strong>Phone Number:</strong> {transaction.phoneNumber}
+                                  </div>
+                                  <div>
+                                    <strong>Payment Date:</strong> {format(new Date(transaction.transactionDate), 'MMM dd, yyyy HH:mm')}
+                                  </div>
+                                  <div>
+                                    <strong>Payment Type:</strong> {transaction.transactionType}
+                                  </div>
                                 </div>
                               </div>
                               
                               <div>
-                                <h4 className="font-medium mb-2">Recent Pending Orders:</h4>
+                                <h4 className="font-medium mb-2">Available Orders for Connection:</h4>
                                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                                  {pendingOrders.map((order) => (
-                                    <div 
-                                      key={order._id} 
-                                      className="flex items-center justify-between p-3 border rounded bg-gray-50"
-                                    >
-                                      <div>
-                                        <div className="font-medium">{order.orderNumber}</div>
-                                        <div className="text-sm text-gray-600">
-                                          {order.customer.name} - KES {order.totalAmount.toLocaleString()}
-                                        </div>
-                                        <div className="text-xs text-gray-500">
-                                          {format(new Date(order.createdAt), 'MMM dd, yyyy')}
-                                        </div>
-                                      </div>
-                                      <Button
-                                        size="sm"
-                                        onClick={() => connectToOrder(transaction.transactionId, order._id)}
-                                        disabled={connecting}
-                                        className="gap-2"
+                                  {pendingOrders.map((order) => {
+                                    const isExactMatch = order.totalAmount === transaction.amountPaid;
+                                    const isPartialMatch = transaction.amountPaid < order.totalAmount;
+                                    
+                                    return (
+                                      <div 
+                                        key={order._id} 
+                                        className={`flex items-center justify-between p-3 border rounded ${
+                                          isExactMatch ? 'bg-green-50 border-green-200' : 
+                                          isPartialMatch ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50'
+                                        }`}
                                       >
-                                        {connecting ? (
-                                          <RefreshCw className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                          <Link2 className="w-4 h-4" />
-                                        )}
-                                        Connect
-                                      </Button>
-                                    </div>
-                                  ))}
+                                        <div>
+                                          <div className="font-medium flex items-center gap-2">
+                                            {order.orderNumber}
+                                            {isExactMatch && (
+                                              <Badge variant="default" className="bg-green-600 text-xs">
+                                                Exact Match
+                                              </Badge>
+                                            )}
+                                            {isPartialMatch && (
+                                              <Badge variant="secondary" className="bg-yellow-600 text-white text-xs">
+                                                Partial Payment
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          <div className="text-sm text-gray-600">
+                                            {order.customer.name} - KES {order.totalAmount.toLocaleString()}
+                                          </div>
+                                          <div className="text-xs text-gray-500">
+                                            {format(new Date(order.createdAt), 'MMM dd, yyyy')}
+                                          </div>
+                                          {isPartialMatch && (
+                                            <div className="text-xs text-yellow-700 mt-1">
+                                              Shortfall: KES {(order.totalAmount - transaction.amountPaid).toLocaleString()}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <Button
+                                          size="sm"
+                                          onClick={() => connectToOrder(transaction.transactionId, order._id)}
+                                          disabled={connecting}
+                                          className="gap-2"
+                                          variant={isExactMatch ? "default" : isPartialMatch ? "secondary" : "outline"}
+                                        >
+                                          {connecting ? (
+                                            <RefreshCw className="w-4 h-4 animate-spin" />
+                                          ) : (
+                                            <Link2 className="w-4 h-4" />
+                                          )}
+                                          Connect
+                                        </Button>
+                                      </div>
+                                    );
+                                  })}
                                   {pendingOrders.length === 0 && (
                                     <p className="text-gray-500 text-center py-4">
                                       No pending orders found
@@ -490,6 +529,11 @@ export default function MpesaTransactionsPage() {
                             </div>
                           </DialogContent>
                         </Dialog>
+                      ) : (
+                        <Badge variant="default" className="bg-green-600">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Connected
+                        </Badge>
                       )}
                     </div>
                   </div>
