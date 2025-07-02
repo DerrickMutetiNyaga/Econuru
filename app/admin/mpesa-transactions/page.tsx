@@ -274,9 +274,27 @@ export default function MpesaTransactionsPage() {
   };
 
   // Helper function to safely format order ID for display
-  const formatOrderId = (orderId: string | null | undefined, maxLength: number = 8) => {
+  const formatOrderId = (orderId: any, maxLength: number = 8) => {
     if (!orderId) return 'Unknown';
-    const idStr = String(orderId);
+    
+    // Handle MongoDB ObjectId or other objects
+    let idStr: string;
+    if (typeof orderId === 'object' && orderId._id) {
+      idStr = String(orderId._id);
+    } else if (typeof orderId === 'object' && orderId.$oid) {
+      idStr = String(orderId.$oid);
+    } else if (typeof orderId === 'object') {
+      // If it's still an object, try to extract a meaningful ID
+      idStr = orderId.toString ? orderId.toString() : JSON.stringify(orderId);
+    } else {
+      idStr = String(orderId);
+    }
+    
+    // Avoid displaying "[object Object]"
+    if (idStr === '[object Object]') {
+      return 'Invalid ID';
+    }
+    
     return idStr.length > maxLength ? idStr.substring(0, maxLength) + '...' : idStr;
   };
 
