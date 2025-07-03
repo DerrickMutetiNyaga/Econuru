@@ -5,6 +5,7 @@ import Customer from '@/lib/models/Customer';
 import Expense from '@/lib/models/Expense';
 import Service from '@/lib/models/Service';
 import Promotion from '@/lib/models/Promotion';
+import MpesaTransaction from '@/lib/models/MpesaTransaction';
 import { requireAdmin } from '@/lib/auth';
 
 // GET reports data
@@ -58,6 +59,11 @@ export const GET = requireAdmin(async (request: NextRequest) => {
     const promotions = await Promotion.find({
       createdAt: { $gte: startDate, $lte: endDate }
     });
+
+    // Fetch M-Pesa transactions within date range
+    const mpesaTransactions = await MpesaTransaction.find({
+      transactionDate: { $gte: startDate, $lte: endDate }
+    }).populate('connectedOrderId');
 
     // Calculate sales report
     const totalRevenue = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
@@ -373,6 +379,84 @@ export const GET = requireAdmin(async (request: NextRequest) => {
       }))
     };
 
+    // M-Pesa Transaction Analysis
+    const totalMpesaTransactions = mpesaTransactions.length;
+    const totalMpesaAmount = mpesaTransactions.reduce((sum, transaction) => sum + (transaction.amountPaid || 0), 0);
+    
+    // Categorize M-Pesa transactions by connection status
+    const fullyPaidMpesa = mpesaTransactions.filter(transaction => 
+      transaction.isConnectedToOrder && transaction.confirmationStatus === 'confirmed'
+    );
+    const partialMpesa = mpesaTransactions.filter(transaction => 
+      transaction.isConnectedToOrder && 
+      transaction.confirmationStatus === 'confirmed' && 
+      transaction.connectedOrderId && 
+      orders.find(order => order._id.toString() === transaction.connectedOrderId?.toString())?.paymentStatus === 'partial'
+    );
+    const unpaidMpesa = mpesaTransactions.filter(transaction => 
+      !transaction.isConnectedToOrder || 
+      transaction.confirmationStatus === 'pending' || 
+      transaction.confirmationStatus === 'rejected'
+    );
+
+    // M-Pesa transaction status distribution
+    const mpesaStatusCounts = {
+      'fully_paid': fullyPaidMpesa.length,
+      'partial': partialMpesa.length,
+      'unpaid': unpaidMpesa.length
+    };
+    
+    const mpesaStatusAmounts = {
+      'fully_paid': fullyPaidMpesa.reduce((sum, transaction) => sum + (transaction.amountPaid || 0), 0),
+      'partial': partialMpesa.reduce((sum, transaction) => sum + (transaction.amountPaid || 0), 0),
+      'unpaid': unpaidMpesa.reduce((sum, transaction) => sum + (transaction.amountPaid || 0), 0)
+    };
+
+    const mpesaStatusPie = Object.entries(mpesaStatusCounts).map(([status, count]) => ({ status, count }));
+    const mpesaStatusAmountPie = Object.entries(mpesaStatusAmounts).map(([status, amount]) => ({ status, amount }));
+
+    // Monthly M-Pesa transactions
+    const monthlyMpesaTransactions = [];
+    months.forEach(month => {
+      const monthTransactions = mpesaTransactions.filter(transaction => {
+        const transactionDate = new Date(transaction.transactionDate);
+        const transactionMonth = transactionDate.toLocaleString('default', { month: 'short', year: 'numeric' });
+        return transactionMonth === month;
+      });
+      const monthAmount = monthTransactions.reduce((sum, transaction) => sum + (transaction.amountPaid || 0), 0);
+      const monthCount = monthTransactions.length;
+      monthlyMpesaTransactions.push({ 
+        month, 
+        amount: monthAmount,
+        count: monthCount,
+        averageAmount: monthCount > 0 ? monthAmount / monthCount : 0
+      });
+    });
+
+    // M-Pesa confirmation status breakdown
+    const mpesaConfirmationStatus = {};
+    mpesaTransactions.forEach(transaction => {
+      const status = transaction.confirmationStatus || 'pending';
+      mpesaConfirmationStatus[status] = (mpesaConfirmationStatus[status] || 0) + 1;
+    });
+
+    const mpesaReport = {
+      totalTransactions: totalMpesaTransactions,
+      totalAmount: totalMpesaAmount,
+      averageTransactionAmount: totalMpesaTransactions > 0 ? totalMpesaAmount / totalMpesaTransactions : 0,
+      fullyPaidCount: fullyPaidMpesa.length,
+      partialCount: partialMpesa.length,
+      unpaidCount: unpaidMpesa.length,
+      fullyPaidAmount: mpesaStatusAmounts.fully_paid,
+      partialAmount: mpesaStatusAmounts.partial,
+      unpaidAmount: mpesaStatusAmounts.unpaid,
+      monthlyTransactions: monthlyMpesaTransactions,
+      statusDistribution: mpesaStatusPie,
+      statusAmountDistribution: mpesaStatusAmountPie,
+      confirmationStatusBreakdown: Object.entries(mpesaConfirmationStatus).map(([status, count]) => ({ status, count })),
+      connectedTransactionsRate: totalMpesaTransactions > 0 ? (fullyPaidMpesa.length / totalMpesaTransactions * 100) : 0
+    };
+
     // Detailed data for Excel export
     const detailedExpensesList = expenses.map(expense => ({
       id: expense._id,
@@ -473,13 +557,84 @@ export const GET = requireAdmin(async (request: NextRequest) => {
       paymentStatusDetails,
       orderTrends,
       financialMetrics,
+      mpesaReport,
       // Detailed lists for Excel export
       detailedData: {
         expensesList: detailedExpensesList,
         ordersList: detailedOrdersList,
         unpaidOrdersList: unpaidOrdersList,
         totalUnpaidAmount: unpaidOrdersList.reduce((sum, order) => sum + order.amountDue, 0),
-        unpaidOrdersCount: unpaidOrdersList.length
+        unpaidOrdersCount: unpaidOrdersList.length,
+        // M-Pesa transaction detailed lists
+        mpesaTransactionsList: mpesaTransactions.map(transaction => ({
+          id: transaction._id,
+          transactionId: transaction.transactionId,
+          mpesaReceiptNumber: transaction.mpesaReceiptNumber,
+          customerName: transaction.customerName,
+          phoneNumber: transaction.phoneNumber,
+          amountPaid: transaction.amountPaid || 0,
+          transactionType: transaction.transactionType,
+          billRefNumber: transaction.billRefNumber || '',
+          isConnectedToOrder: transaction.isConnectedToOrder,
+          connectedOrderId: transaction.connectedOrderId?.toString() || '',
+          confirmationStatus: transaction.confirmationStatus,
+          pendingOrderId: transaction.pendingOrderId?.toString() || '',
+          confirmedCustomerName: transaction.confirmedCustomerName || '',
+          confirmationNotes: transaction.confirmationNotes || '',
+          paymentCompletedAt: transaction.paymentCompletedAt,
+          transactionDate: transaction.transactionDate,
+          createdAt: transaction.createdAt,
+          formattedAmount: (transaction.amountPaid || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+          formattedTransactionDate: new Date(transaction.transactionDate).toLocaleDateString('en-KE'),
+          formattedPaymentCompletedAt: new Date(transaction.paymentCompletedAt).toLocaleDateString('en-KE'),
+          formattedCreatedAt: new Date(transaction.createdAt).toLocaleDateString('en-KE')
+        })).sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime()),
+        fullyPaidMpesaList: fullyPaidMpesa.map(transaction => ({
+          id: transaction._id,
+          transactionId: transaction.transactionId,
+          mpesaReceiptNumber: transaction.mpesaReceiptNumber,
+          customerName: transaction.customerName,
+          phoneNumber: transaction.phoneNumber,
+          amountPaid: transaction.amountPaid || 0,
+          connectedOrderId: transaction.connectedOrderId?.toString() || '',
+          confirmationStatus: transaction.confirmationStatus,
+          confirmedCustomerName: transaction.confirmedCustomerName || '',
+          transactionDate: transaction.transactionDate,
+          formattedAmount: (transaction.amountPaid || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+          formattedTransactionDate: new Date(transaction.transactionDate).toLocaleDateString('en-KE')
+        })).sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime()),
+        partialMpesaList: partialMpesa.map(transaction => ({
+          id: transaction._id,
+          transactionId: transaction.transactionId,
+          mpesaReceiptNumber: transaction.mpesaReceiptNumber,
+          customerName: transaction.customerName,
+          phoneNumber: transaction.phoneNumber,
+          amountPaid: transaction.amountPaid || 0,
+          connectedOrderId: transaction.connectedOrderId?.toString() || '',
+          confirmationStatus: transaction.confirmationStatus,
+          confirmedCustomerName: transaction.confirmedCustomerName || '',
+          transactionDate: transaction.transactionDate,
+          formattedAmount: (transaction.amountPaid || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+          formattedTransactionDate: new Date(transaction.transactionDate).toLocaleDateString('en-KE')
+        })).sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime()),
+        unpaidMpesaList: unpaidMpesa.map(transaction => ({
+          id: transaction._id,
+          transactionId: transaction.transactionId,
+          mpesaReceiptNumber: transaction.mpesaReceiptNumber,
+          customerName: transaction.customerName,
+          phoneNumber: transaction.phoneNumber,
+          amountPaid: transaction.amountPaid || 0,
+          confirmationStatus: transaction.confirmationStatus,
+          pendingOrderId: transaction.pendingOrderId?.toString() || '',
+          billRefNumber: transaction.billRefNumber || '',
+          confirmationNotes: transaction.confirmationNotes || '',
+          transactionDate: transaction.transactionDate,
+          daysPending: Math.floor((new Date().getTime() - new Date(transaction.transactionDate).getTime()) / (1000 * 60 * 60 * 24)),
+          formattedAmount: (transaction.amountPaid || 0).toLocaleString('en-KE', { style: 'currency', currency: 'KES' }),
+          formattedTransactionDate: new Date(transaction.transactionDate).toLocaleDateString('en-KE')
+        })).sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime()),
+        totalMpesaAmount: totalMpesaAmount,
+        totalMpesaTransactions: totalMpesaTransactions
       }
     };
 

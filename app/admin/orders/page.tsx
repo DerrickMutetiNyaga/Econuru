@@ -1691,7 +1691,7 @@ export default function OrdersPage() {
 
                     {/* Payment Actions */}
                     <div className="flex gap-2 pt-2">
-                      {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed' || order.paymentStatus === 'partial') && (
+                      {(order.paymentStatus !== 'paid') && (
                         <Button
                           size="sm"
                           onClick={(e) => {
@@ -1848,7 +1848,7 @@ export default function OrdersPage() {
                         )}
                         
                         {/* Payment Actions */}
-                        {(order.paymentStatus === 'unpaid' || order.paymentStatus === 'failed' || order.paymentStatus === 'partial') && (
+                        {(order.paymentStatus !== 'paid') && (
                           <Button
                             size="sm"
                             onClick={(e) => {
@@ -1857,10 +1857,9 @@ export default function OrdersPage() {
                             }}
                             disabled={initiatingPayment}
                             className="bg-green-600 hover:bg-green-700 text-white"
-                            title={order.paymentStatus === 'partial' ? 'Ksh Request Balance Payment' : 'Ksh Request Payment'}
                           >
                             {initiatingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <DollarSign className="w-4 h-4" />}
-                            <span className="ml-1 hidden sm:inline">Ksh</span>
+                            {order.paymentStatus === 'partial' ? 'Ksh Request Balance' : 'Ksh Request Payment'}
                           </Button>
                         )}
                         {order.paymentStatus === 'pending' && order.mpesaPayment?.checkoutRequestId && (

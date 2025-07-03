@@ -4,6 +4,75 @@ import Order from '@/lib/models/Order';
 import MpesaTransaction from '@/lib/models/MpesaTransaction';
 import PaymentAuditLog from '@/lib/models/PaymentAuditLog';
 
+// SMS notification function
+const sendPaymentConfirmationSMS = async (order: any, amountPaid: number, isFullyPaid: boolean, mpesaReceiptNumber: string) => {
+  try {
+    if (!order.customer?.phone) {
+      console.log('No phone number available for SMS notification');
+      return;
+    }
+
+    const message = isFullyPaid 
+      ? `*** Payment Confirmation - Econuru Services ***
+
+Dear ${order.customer.name},
+
+Thank you for your payment!
+
+Order #${order.orderNumber}
+Amount Paid: Ksh ${amountPaid.toLocaleString()}
+M-Pesa Receipt: ${mpesaReceiptNumber}
+Payment Status: PAID
+
+Your order is now confirmed and will be processed.
+
+We'll keep you updated on your order progress.
+
+Thank you for choosing Econuru Services!
+
+Need help? Call us at +254 757 883 799`
+      : `*** Payment Received - Econuru Services ***
+
+Dear ${order.customer.name},
+
+Thank you for your partial payment!
+
+Order #${order.orderNumber}
+Amount Paid: Ksh ${amountPaid.toLocaleString()}
+M-Pesa Receipt: ${mpesaReceiptNumber}
+Remaining Balance: Ksh ${(order.remainingBalance || 0).toLocaleString()}
+
+Your payment has been processed. Please complete the remaining balance to proceed.
+
+Thank you for choosing Econuru Services!
+
+Need help? Call us at +254 757 883 799`;
+
+    const response = await fetch(process.env.NODE_ENV === 'production' 
+      ? 'https://www.econuru.co.ke/api/sms' 
+      : 'http://localhost:3000/api/sms', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        mobile: order.customer.phone,
+        message,
+        type: 'payment_confirmation'
+      }),
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      console.log(`✅ Payment confirmation SMS sent to ${order.customer.phone} for order ${order.orderNumber}`);
+    } else {
+      console.error(`❌ Failed to send payment confirmation SMS: ${data.error}`);
+    }
+  } catch (error) {
+    console.error('SMS sending error:', error);
+  }
+};
+
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
@@ -203,6 +272,9 @@ export async function POST(request: NextRequest) {
 
           console.log(`✅ AUTO-CONFIRMED: STK Push payment for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid})`);
           console.log(`💰 Balance Updated: ${currentRemainingBalance} → ${newRemainingBalance} (${isFullyPaid ? 'FULLY PAID' : 'PARTIAL'})`);
+          
+          // Send SMS notification
+          await sendPaymentConfirmationSMS(order, amountPaid, isFullyPaid, mpesaReceiptNumber);
           
         } catch (transactionError) {
           console.error('Error processing exact amount match:', transactionError);
