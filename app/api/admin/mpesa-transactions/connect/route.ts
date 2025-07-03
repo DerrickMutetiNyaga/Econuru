@@ -27,17 +27,20 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
-    // Find the M-Pesa transaction
+    // Find the M-Pesa transaction (allow reconnecting)
     const transaction = await MpesaTransaction.findOne({ 
-      transactionId: transactionId,
-      isConnectedToOrder: false 
+      transactionId: transactionId
     });
 
     if (!transaction) {
       return NextResponse.json({ 
-        error: 'Transaction not found or already connected' 
+        error: 'Transaction not found' 
       }, { status: 404 });
     }
+
+    // If transaction is already connected, we'll update the connection
+    const isReconnecting = transaction.isConnectedToOrder;
+    const previousOrderId = transaction.connectedOrderId;
 
     // Find the order
     const order = await Order.findById(orderId);
@@ -47,8 +50,8 @@ export async function POST(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Check if order is already paid
-    if (order.paymentStatus === 'paid') {
+    // Check if order is already paid (only for new connections, not reconnections)
+    if (!isReconnecting && order.paymentStatus === 'paid') {
       return NextResponse.json({ 
         error: 'Order is already marked as paid' 
       }, { status: 400 });
@@ -78,6 +81,47 @@ export async function POST(request: NextRequest) {
       phoneNumber: transaction.phoneNumber,
       method: paymentMethod
     };
+
+    // If reconnecting, first remove the payment from the previous order
+    if (isReconnecting && previousOrderId && previousOrderId.toString() !== orderId) {
+      const previousOrder = await Order.findById(previousOrderId);
+      if (previousOrder) {
+        // Remove this transaction's payment from the previous order
+        const previousTotalPaid = previousOrder.partialPayments?.reduce((sum, payment) => {
+          return sum + (payment.amount || 0);
+        }, 0) || 0;
+        
+        const newPreviousTotalPaid = Math.max(0, previousTotalPaid - amountPaid);
+        const newPreviousRemainingBalance = Math.max(0, previousOrder.totalAmount - newPreviousTotalPaid);
+        
+        let newPreviousPaymentStatus = 'unpaid';
+        if (newPreviousTotalPaid >= previousOrder.totalAmount) {
+          newPreviousPaymentStatus = 'paid';
+        } else if (newPreviousTotalPaid > 0) {
+          newPreviousPaymentStatus = 'partial';
+        }
+
+        // Remove the specific payment record
+        await Order.findByIdAndUpdate(previousOrderId, {
+          paymentStatus: newPreviousPaymentStatus,
+          remainingBalance: newPreviousRemainingBalance,
+          $pull: {
+            partialPayments: {
+              mpesaReceiptNumber: transaction.mpesaReceiptNumber,
+              amount: amountPaid
+            }
+          }
+        });
+
+        console.log(`🔄 Removed payment from previous order ${previousOrder.orderNumber}:`, {
+          oldStatus: previousOrder.paymentStatus,
+          newStatus: newPreviousPaymentStatus,
+          oldBalance: previousOrder.remainingBalance,
+          newBalance: newPreviousRemainingBalance,
+          removedAmount: amountPaid
+        });
+      }
+    }
 
     // Update the order with payment details
     await Order.findByIdAndUpdate(orderId, {
@@ -113,19 +157,20 @@ export async function POST(request: NextRequest) {
       notes: `${transaction.notes} Connected to order ${order.orderNumber} by admin.`
     });
 
+    const actionType = isReconnecting ? 'RECONNECTED' : 'CONNECTED';
     const logMessage = isExactPayment 
-      ? `🔗✅ FULL payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid})`
+      ? `🔗✅ ${actionType} FULL payment transaction ${transactionId} to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid})`
       : isOverPayment
-      ? `🔗💰 OVERPAYMENT transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid} for remaining KES ${currentRemainingBalance})`
-      : `🔗⚠️ PARTIAL payment transaction ${transactionId} connected to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid}, remaining: KES ${newRemainingBalance})`;
+      ? `🔗💰 ${actionType} OVERPAYMENT transaction ${transactionId} to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid} for remaining KES ${currentRemainingBalance})`
+      : `🔗⚠️ ${actionType} PARTIAL payment transaction ${transactionId} to order ${order.orderNumber} by ${decoded.email} (KES ${amountPaid}, remaining: KES ${newRemainingBalance})`;
     
     console.log(logMessage);
 
     const successMessage = isExactPayment
-      ? `Transaction ${transactionId} successfully connected to order ${order.orderNumber} - Order fully paid`
+      ? `Transaction ${transactionId} successfully ${isReconnecting ? 'reconnected' : 'connected'} to order ${order.orderNumber} - Order fully paid`
       : isOverPayment
-      ? `Transaction ${transactionId} connected as overpayment (KES ${amountPaid} for remaining KES ${currentRemainingBalance}) to order ${order.orderNumber}`
-      : `Transaction ${transactionId} connected as partial payment (KES ${amountPaid}) to order ${order.orderNumber}. Remaining balance: KES ${newRemainingBalance}`;
+      ? `Transaction ${transactionId} ${isReconnecting ? 'reconnected' : 'connected'} as overpayment (KES ${amountPaid} for remaining KES ${currentRemainingBalance}) to order ${order.orderNumber}`
+      : `Transaction ${transactionId} ${isReconnecting ? 'reconnected' : 'connected'} as partial payment (KES ${amountPaid}) to order ${order.orderNumber}. Remaining balance: KES ${newRemainingBalance}`;
 
     return NextResponse.json({
       success: true,

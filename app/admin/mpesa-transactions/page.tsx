@@ -15,7 +15,10 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  Plus,
+  Edit,
+  Calculator
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
@@ -26,6 +29,8 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 interface MpesaTransaction {
   _id: string;
@@ -72,6 +77,25 @@ export default function MpesaTransactionsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<MpesaTransaction | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [connecting, setConnecting] = useState(false);
+
+  // Add transaction modal state
+  const [addTransactionDialogOpen, setAddTransactionDialogOpen] = useState(false);
+  const [newTransaction, setNewTransaction] = useState({
+    transactionId: '',
+    mpesaReceiptNumber: '',
+    transactionDate: '',
+    transactionTime: '',
+    phoneNumber: '',
+    amountPaid: '',
+    customerName: '',
+    transactionType: 'C2B',
+    notes: ''
+  });
+  const [addingTransaction, setAddingTransaction] = useState(false);
+
+  // Recalculate payment status modal state
+  const [recalculateDialogOpen, setRecalculateDialogOpen] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAdmin) {
@@ -224,6 +248,122 @@ export default function MpesaTransactionsPage() {
     }
   };
 
+  const handleAddTransaction = async () => {
+    if (!newTransaction.transactionId || !newTransaction.amountPaid || !newTransaction.customerName) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setAddingTransaction(true);
+      
+      const transactionData = {
+        ...newTransaction,
+        amountPaid: parseFloat(newTransaction.amountPaid),
+        transactionDate: newTransaction.transactionDate + 'T' + newTransaction.transactionTime,
+        paymentCompletedAt: new Date().toISOString()
+      };
+
+      const response = await fetch('/api/admin/mpesa-transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(transactionData),
+      });
+      
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: 'Transaction Added',
+          description: 'M-Pesa transaction added successfully',
+          variant: 'default',
+        });
+
+        // Reset form and close dialog
+        setNewTransaction({
+          transactionId: '',
+          mpesaReceiptNumber: '',
+          transactionDate: '',
+          transactionTime: '',
+          phoneNumber: '',
+          amountPaid: '',
+          customerName: '',
+          transactionType: 'C2B',
+          notes: ''
+        });
+        setAddTransactionDialogOpen(false);
+        
+        // Reload data to show new transaction
+        loadData();
+      } else {
+        toast({
+          title: 'Add Failed',
+          description: data.error || 'Failed to add transaction',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error adding transaction:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add transaction',
+        variant: 'destructive',
+      });
+    } finally {
+      setAddingTransaction(false);
+    }
+  };
+
+  const handleRecalculatePaymentStatus = async () => {
+    try {
+      setRecalculating(true);
+      
+      const response = await fetch('/api/admin/orders/recalculate-payments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: 'Payment Status Updated',
+          description: `Updated ${data.updatedCount} orders based on M-Pesa transactions`,
+          variant: 'default',
+        });
+        
+        // Reload data to show updated statuses
+        loadData();
+      } else {
+        toast({
+          title: 'Update Failed',
+          description: data.error || 'Failed to update payment statuses',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error recalculating payment status:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to recalculate payment status',
+        variant: 'destructive',
+      });
+    } finally {
+      setRecalculating(false);
+      setRecalculateDialogOpen(false);
+    }
+  };
+
   const filteredTransactions = transactions.filter(transaction => {
     const matchesSearch = 
       transaction.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -370,6 +510,24 @@ export default function MpesaTransactionsPage() {
           <p className="text-gray-600 mt-2">View and manage all M-Pesa transaction records</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            onClick={() => setAddTransactionDialogOpen(true)} 
+            variant="outline" 
+            size="sm" 
+            className="gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Add Transaction</span>
+          </Button>
+          <Button 
+            onClick={() => setRecalculateDialogOpen(true)} 
+            variant="outline" 
+            size="sm" 
+            className="gap-2"
+          >
+            <Calculator className="w-4 h-4" />
+            <span className="hidden sm:inline">Recalculate Payments</span>
+          </Button>
           <Button onClick={loadData} variant="outline" size="sm" className="gap-2">
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:inline">Refresh</span>
@@ -572,29 +730,26 @@ export default function MpesaTransactionsPage() {
                               {getStatusBadge(transaction)}
                             </TableCell>
                             <TableCell>
-                              {!transaction.isConnectedToOrder ? (
+                              <div className="flex gap-1">
                                 <Button 
                                   size="sm" 
                                   onClick={() => handleConnectTransaction(transaction)}
                                   className="gap-2"
+                                  variant={transaction.isConnectedToOrder ? "outline" : "default"}
                                 >
-                                  <Link2 className="w-4 h-4" />
-                                  Connect
+                                  {transaction.isConnectedToOrder ? (
+                                    <>
+                                      <Edit className="w-4 h-4" />
+                                      Edit
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Link2 className="w-4 h-4" />
+                                      Connect
+                                    </>
+                                  )}
                                 </Button>
-                              ) : transaction.isConnectedToOrder && !getConnectedOrder(transaction) ? (
-                                <div className="flex gap-1">
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => handleConnectTransaction(transaction)}
-                                    className="gap-1 text-xs"
-                                    title="Reconnect to a different order"
-                                  >
-                                    <Link2 className="w-3 h-3" />
-                                    Fix
-                                  </Button>
-                                </div>
-                              ) : null}
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
@@ -683,26 +838,24 @@ export default function MpesaTransactionsPage() {
                           </div>
 
                           {/* Action button */}
-                          {!transaction.isConnectedToOrder ? (
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleConnectTransaction(transaction)}
-                              className="w-full gap-2"
-                            >
-                              <Link2 className="w-4 h-4" />
-                              Connect to Order
-                            </Button>
-                          ) : transaction.isConnectedToOrder && !getConnectedOrder(transaction) ? (
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleConnectTransaction(transaction)}
-                              className="w-full gap-2 border-red-300 text-red-600 hover:bg-red-50"
-                            >
-                              <Link2 className="w-4 h-4" />
-                              Fix Connection
-                            </Button>
-                          ) : null}
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleConnectTransaction(transaction)}
+                            className="w-full gap-2"
+                            variant={transaction.isConnectedToOrder ? "outline" : "default"}
+                          >
+                            {transaction.isConnectedToOrder ? (
+                              <>
+                                <Edit className="w-4 h-4" />
+                                Edit Connection
+                              </>
+                            ) : (
+                              <>
+                                <Link2 className="w-4 h-4" />
+                                Connect to Order
+                              </>
+                            )}
+                          </Button>
                         </div>
                       </Card>
                     );
@@ -717,79 +870,82 @@ export default function MpesaTransactionsPage() {
       {/* Connection Dialog */}
       <Dialog open={connectionDialogOpen} onOpenChange={setConnectionDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
+          <DialogHeader>
             <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <Link2 className="w-5 h-5 text-blue-600" />
-              Connect Transaction to Order
+              {selectedTransaction?.isConnectedToOrder ? 'Edit Transaction Connection' : 'Connect Transaction to Order'}
             </DialogTitle>
             <DialogDescription className="text-gray-600">
-              Select an order to connect this M-Pesa transaction to
-                              </DialogDescription>
-                            </DialogHeader>
+              {selectedTransaction?.isConnectedToOrder 
+                ? 'Select a different order to reconnect this M-Pesa transaction to'
+                : 'Select an order to connect this M-Pesa transaction to'
+              }
+            </DialogDescription>
+          </DialogHeader>
 
           {selectedTransaction && (
-                            <div className="space-y-4">
+            <div className="space-y-4">
               {/* Transaction Details */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-700">Customer:</span>
                     <span className="text-sm font-bold text-gray-900">{selectedTransaction.customerName}</span>
-                                  </div>
-                                                        <div className="flex justify-between">
-                     <span className="text-sm font-medium text-gray-700">Phone:</span>
-                     <span className="text-sm font-bold text-gray-900 font-mono">{formatPhoneNumber(selectedTransaction.phoneNumber)}</span>
-                   </div>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium text-gray-700">Phone:</span>
+                    <span className="text-sm font-bold text-gray-900 font-mono">{formatPhoneNumber(selectedTransaction.phoneNumber)}</span>
+                  </div>
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-700">Amount:</span>
                     <span className="text-sm font-bold text-green-600">KES {selectedTransaction.amountPaid.toLocaleString()}</span>
-                                  </div>
+                  </div>
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-700">Transaction ID:</span>
                     <span className="text-sm font-mono text-gray-900">{selectedTransaction.transactionId}</span>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                             {/* Order Selection */}
-               <div className="space-y-2">
-                 <label className="block text-sm font-medium text-gray-700">
-                   Select Order
-                 </label>
-                 <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
-                   <SelectTrigger className="w-full">
-                     <SelectValue placeholder="Choose an order..." />
-                   </SelectTrigger>
-                   <SelectContent className="max-h-[200px] overflow-y-auto">
-                     {orders
-                       .filter(order => order.paymentStatus !== 'paid')
-                       .map((order) => (
-                         <SelectItem key={order._id} value={order._id} className="text-sm">
-                           <div className="flex flex-col">
-                             <span className="font-medium">{order.orderNumber}</span>
-                             <span className="text-xs text-gray-500">{order.customer.name}</span>
-                             <span className="text-xs text-green-600">KES {(order.remainingBalance || order.totalAmount).toLocaleString()}</span>
-                                          </div>
-                         </SelectItem>
-                       ))}
-                   </SelectContent>
-                 </Select>
-                 <p className="text-xs text-gray-500">
-                   Only showing orders that are not fully paid
-                 </p>
-                                          </div>
-                                            </div>
-                                          )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Order Selection */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Select Order
+                </label>
+                <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Choose an order..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[200px] overflow-y-auto">
+                    {orders
+                      .filter(order => order.paymentStatus !== 'paid')
+                      .map((order) => (
+                        <SelectItem key={order._id} value={order._id} className="text-sm">
+                          <div className="flex flex-col">
+                            <span className="font-medium">{order.orderNumber}</span>
+                            <span className="text-xs text-gray-500">{order.customer.name}</span>
+                            <span className="text-xs text-green-600">KES {(order.remainingBalance || order.totalAmount).toLocaleString()}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">
+                  Only showing orders that are not fully paid
+                </p>
+              </div>
+            </div>
+          )}
 
           <DialogFooter className="gap-2">
-                                        <Button
+            <Button
               variant="outline" 
               onClick={() => {
                 setConnectionDialogOpen(false);
                 setSelectedTransaction(null);
                 setSelectedOrderId('');
               }}
-                                          disabled={connecting}
+              disabled={connecting}
             >
               Cancel
             </Button>
@@ -797,22 +953,240 @@ export default function MpesaTransactionsPage() {
               onClick={connectTransactionToOrder}
               disabled={connecting || !selectedOrderId}
               className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
-                                        >
-                                          {connecting ? (
+            >
+              {connecting ? (
                 <>
-                                            <RefreshCw className="w-4 h-4 animate-spin" />
+                  <RefreshCw className="w-4 h-4 animate-spin" />
                   Connecting...
                 </>
-                                          ) : (
+              ) : (
                 <>
-                                            <Link2 className="w-4 h-4" />
-                  Connect Transaction
+                  <Link2 className="w-4 h-4" />
+                  {selectedTransaction?.isConnectedToOrder ? 'Update Connection' : 'Connect Transaction'}
                 </>
-                                          )}
-                                        </Button>
+              )}
+            </Button>
           </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Transaction Dialog */}
+      <Dialog open={addTransactionDialogOpen} onOpenChange={setAddTransactionDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Plus className="w-5 h-5 text-green-600" />
+              Add Manual M-Pesa Transaction
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Add a M-Pesa transaction manually when there was an issue with the automatic system
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="transactionId">Transaction ID *</Label>
+                <Input
+                  id="transactionId"
+                  placeholder="e.g., QK123456789"
+                  value={newTransaction.transactionId}
+                  onChange={(e) => setNewTransaction(prev => ({ ...prev, transactionId: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="mpesaReceiptNumber">M-Pesa Receipt Number</Label>
+                <Input
+                  id="mpesaReceiptNumber"
+                  placeholder="e.g., QK123456789"
+                  value={newTransaction.mpesaReceiptNumber}
+                  onChange={(e) => setNewTransaction(prev => ({ ...prev, mpesaReceiptNumber: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="transactionDate">Transaction Date *</Label>
+                <Input
+                  id="transactionDate"
+                  type="date"
+                  value={newTransaction.transactionDate}
+                  onChange={(e) => setNewTransaction(prev => ({ ...prev, transactionDate: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="transactionTime">Transaction Time *</Label>
+                <Input
+                  id="transactionTime"
+                  type="time"
+                  value={newTransaction.transactionTime}
+                  onChange={(e) => setNewTransaction(prev => ({ ...prev, transactionTime: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="phoneNumber">Phone Number *</Label>
+                <Input
+                  id="phoneNumber"
+                  placeholder="e.g., 254700000000"
+                  value={newTransaction.phoneNumber}
+                  onChange={(e) => setNewTransaction(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="amountPaid">Amount Paid (KES) *</Label>
+                <Input
+                  id="amountPaid"
+                  type="number"
+                  placeholder="e.g., 1000"
+                  value={newTransaction.amountPaid}
+                  onChange={(e) => setNewTransaction(prev => ({ ...prev, amountPaid: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="customerName">Customer Name *</Label>
+                <Input
+                  id="customerName"
+                  placeholder="e.g., John Doe"
+                  value={newTransaction.customerName}
+                  onChange={(e) => setNewTransaction(prev => ({ ...prev, customerName: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="transactionType">Transaction Type</Label>
+                <Select 
+                  value={newTransaction.transactionType} 
+                  onValueChange={(value) => setNewTransaction(prev => ({ ...prev, transactionType: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="C2B">C2B</SelectItem>
+                    <SelectItem value="STK_PUSH">STK Push</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                placeholder="Additional notes about this transaction..."
+                value={newTransaction.notes}
+                onChange={(e) => setNewTransaction(prev => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline" 
+              onClick={() => {
+                setAddTransactionDialogOpen(false);
+                setNewTransaction({
+                  transactionId: '',
+                  mpesaReceiptNumber: '',
+                  transactionDate: '',
+                  transactionTime: '',
+                  phoneNumber: '',
+                  amountPaid: '',
+                  customerName: '',
+                  transactionType: 'C2B',
+                  notes: ''
+                });
+              }}
+              disabled={addingTransaction}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddTransaction}
+              disabled={addingTransaction || !newTransaction.transactionId || !newTransaction.amountPaid || !newTransaction.customerName}
+              className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+            >
+              {addingTransaction ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Add Transaction
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recalculate Payment Status Dialog */}
+      <Dialog open={recalculateDialogOpen} onOpenChange={setRecalculateDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Calculator className="w-5 h-5 text-blue-600" />
+              Recalculate Payment Status
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              This will check all M-Pesa transactions and update order payment statuses based on the total amount paid.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                <div className="text-sm text-yellow-800">
+                  <p className="font-medium">What this does:</p>
+                  <ul className="mt-2 space-y-1 list-disc list-inside">
+                    <li>Checks all M-Pesa transactions connected to each order</li>
+                    <li>Calculates total amount paid vs. order total</li>
+                    <li>Updates payment status to 'paid', 'partial', or 'unpaid'</li>
+                    <li>Updates remaining balance for each order</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline" 
+              onClick={() => setRecalculateDialogOpen(false)}
+              disabled={recalculating}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRecalculatePaymentStatus}
+              disabled={recalculating}
+              className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+            >
+              {recalculating ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Recalculating...
+                </>
+              ) : (
+                <>
+                  <Calculator className="w-4 h-4" />
+                  Recalculate Payments
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 } 
