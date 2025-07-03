@@ -1151,6 +1151,21 @@ export default function OrdersPage() {
     }
   };
 
+  const isValidPhone = (phone: string | undefined) => {
+    if (!phone) return false;
+    const cleaned = phone.replace(/\s+/g, '');
+    // Check for 64-char hex hash, 'Data Error', 'Unknown', or any non-digit string
+    if (
+      (cleaned.length === 64 && /^[a-f0-9]+$/i.test(cleaned)) ||
+      cleaned === 'Data Error' ||
+      cleaned === 'Unknown' ||
+      !/^\d{10,15}$/.test(cleaned)
+    ) {
+      return false;
+    }
+    return true;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1606,16 +1621,15 @@ export default function OrdersPage() {
                                 )}
                               </>
                             )}
-                            
-                            {/* Payment Phone Number (if different from customer phone) */}
-                            {(order.mpesaPayment?.phoneNumber || order.phoneNumber) && 
-                             (order.mpesaPayment?.phoneNumber || order.phoneNumber) !== order.customer.phone && (
-                              <div className="flex justify-between text-xs mt-1 pt-1 border-t border-amber-100">
-                                <span className="text-blue-700 font-medium">Payment Phone:</span>
-                                <span className="text-blue-700 font-mono">{(order.mpesaPayment?.phoneNumber || order.phoneNumber)}</span>
-                              </div>
+                            {/* Payment Phone (only if valid and different from customer phone) */}
+                            {(order.mpesaPayment?.phoneNumber || order.phoneNumber) &&
+                              isValidPhone(order.mpesaPayment?.phoneNumber || order.phoneNumber) &&
+                              (order.mpesaPayment?.phoneNumber || order.phoneNumber) !== order.customer.phone && (
+                                <div className="flex justify-between text-xs mt-1 pt-1 border-t border-amber-100">
+                                  <span className="text-blue-700 font-medium">Payment Phone:</span>
+                                  <span className="text-blue-700 font-mono">{order.mpesaPayment?.phoneNumber || order.phoneNumber}</span>
+                                </div>
                             )}
-                            
                             {/* M-Pesa Receipt Number */}
                             {(order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber) && (
                               <div className="flex justify-between text-xs mt-1">
