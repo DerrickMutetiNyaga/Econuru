@@ -689,7 +689,13 @@ export default function MpesaTransactionsPage() {
                             </TableCell>
                             <TableCell>
                               <div className="font-mono text-sm">
-                                {formatPhoneNumber(transaction.phoneNumber)}
+                                {(() => {
+                                  if (connectedOrder && connectedOrder.customer && connectedOrder.customer.phone) {
+                                    return connectedOrder.customer.phone;
+                                  }
+                                  // If not connected, show 'Null'
+                                  return 'Null';
+                                })()}
                               </div>
                             </TableCell>
                             <TableCell>
@@ -794,7 +800,13 @@ export default function MpesaTransactionsPage() {
                             <div className="text-right">
                               <p className="text-sm text-gray-500">Phone</p>
                               <p className="font-mono text-sm">
-                                {formatPhoneNumber(transaction.phoneNumber)}
+                                {(() => {
+                                  if (connectedOrder && connectedOrder.customer && connectedOrder.customer.phone) {
+                                    return connectedOrder.customer.phone;
+                                  }
+                                  // If not connected, show 'Null'
+                                  return 'Null';
+                                })()}
                               </p>
                             </div>
                           </div>
