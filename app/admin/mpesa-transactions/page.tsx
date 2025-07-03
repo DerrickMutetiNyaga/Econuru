@@ -925,6 +925,16 @@ export default function MpesaTransactionsPage() {
                             <span className="font-medium">{order.orderNumber}</span>
                             <span className="text-xs text-gray-500">{order.customer.name}</span>
                             <span className="text-xs text-green-600">KES {(order.remainingBalance || order.totalAmount).toLocaleString()}</span>
+                            {/* Show phone number comparison */}
+                            {selectedTransaction && order.customer.phone !== formatPhoneNumber(selectedTransaction.phoneNumber) && (
+                              <div className="text-xs text-orange-600 mt-1">
+                                <span>⚠️ Phone mismatch</span>
+                                <br />
+                                <span className="text-gray-500">Order: {order.customer.phone}</span>
+                                <br />
+                                <span className="text-gray-500">Payment: {formatPhoneNumber(selectedTransaction.phoneNumber)}</span>
+                              </div>
+                            )}
                           </div>
                         </SelectItem>
                       ))}
@@ -933,6 +943,30 @@ export default function MpesaTransactionsPage() {
                 <p className="text-xs text-gray-500">
                   Only showing orders that are not fully paid
                 </p>
+                
+                {/* Phone Number Comparison Warning */}
+                {selectedOrderId && selectedTransaction && (() => {
+                  const selectedOrder = orders.find(order => order._id === selectedOrderId);
+                  if (selectedOrder && selectedOrder.customer.phone !== formatPhoneNumber(selectedTransaction.phoneNumber)) {
+                    return (
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="w-4 h-4 text-orange-600" />
+                          <span className="text-sm font-medium text-orange-800">Phone Number Mismatch</span>
+                        </div>
+                        <div className="text-xs text-orange-700 space-y-1">
+                          <div><strong>Order Phone:</strong> {selectedOrder.customer.phone}</div>
+                          <div><strong>Payment Phone:</strong> {formatPhoneNumber(selectedTransaction.phoneNumber)}</div>
+                          <div className="mt-2 text-orange-600">
+                            ⚠️ The payment phone number is different from the order phone number. 
+                            The order will retain the original customer phone, but the payment details will show the actual payment phone.
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             </div>
           )}

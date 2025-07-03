@@ -178,6 +178,10 @@ export async function POST(request: NextRequest) {
       // ALWAYS create M-Pesa transaction record for successful STK payments
       let mpesaTransaction;
       
+      // Get the requested phone number from pending payment data
+      const requestedPhoneNumber = order.pendingMpesaPayment?.phoneNumber || 'Unknown';
+      const actualPhoneNumber = phoneNumber || 'Unknown';
+      
       if (isExactAmountMatch) {
         // EXACT AMOUNT MATCH: Auto-process the payment and subtract from balance
         try {
@@ -206,7 +210,7 @@ export async function POST(request: NextRequest) {
             confirmedBy: 'SYSTEM',
             confirmedCustomerName: order.customer?.name || 'Auto-confirmed',
             confirmedAt: new Date(),
-            notes: `AUTO-CONFIRMED: STK Push exact amount match for order ${order.orderNumber}. Payment type: ${paymentType}. Amount: KES ${amountPaid}. ${isFullyPaid ? 'Order fully paid.' : `Remaining balance: KES ${newRemainingBalance}`}`
+            notes: `AUTO-CONFIRMED: STK Push exact amount match for order ${order.orderNumber}. Requested: ${requestedPhoneNumber}, Paid: ${actualPhoneNumber}. Payment type: ${paymentType}. Amount: KES ${amountPaid}. ${isFullyPaid ? 'Order fully paid.' : `Remaining balance: KES ${newRemainingBalance}`}`
           });
 
           await mpesaTransaction.save();
@@ -257,26 +261,26 @@ export async function POST(request: NextRequest) {
           // Create audit log
           await PaymentAuditLog.create({
             action: 'auto_confirm_payment',
-            transactionId: mpesaTransaction._id,
-            orderId: order._id,
-            adminId: null,
-            adminName: 'SYSTEM',
-            transactionAmount: amountPaid,
-            orderAmount: orderTotal,
-            paymentType: paymentType,
-            confirmedCustomerName: order.customer?.name || 'Auto-confirmed',
+            transactionId: mpesaReceiptNumber,
+            orderId: order.orderNumber,
+            adminUserId: 'SYSTEM',
+            adminUserName: 'SYSTEM',
+            customerName: order.customer?.name || 'Auto-confirmed',
+            amount: amountPaid,
+            phoneNumber: actualPhoneNumber,
+            notes: `STK Push payment confirmed. Requested: ${requestedPhoneNumber}, Paid: ${actualPhoneNumber}`,
+            previousStatus: 'pending',
+            newStatus: isFullyPaid ? 'paid' : 'partial',
             metadata: {
-              mpesaReceiptNumber: mpesaReceiptNumber,
-              phoneNumber: phoneNumber,
-              requestedAmount: requestedAmount,
-              isFullPayment: isFullyPaid,
-              previousBalance: currentRemainingBalance,
-              newBalance: newRemainingBalance,
-              autoConfirmed: true
+              expectedAmount: requestedAmount,
+              actualAmount: amountPaid,
+              paymentType: paymentType,
+              source: 'stkpush'
             }
           });
 
           console.log(`✅ AUTO-CONFIRMED: STK Push payment for order ${order.orderNumber}: Receipt ${mpesaReceiptNumber} (KES ${amountPaid})`);
+          console.log(`📱 Phone Tracking: Requested ${requestedPhoneNumber} → Paid ${actualPhoneNumber}`);
           console.log(`💰 Balance Updated: ${currentRemainingBalance} → ${newRemainingBalance} (${isFullyPaid ? 'FULLY PAID' : 'PARTIAL'})`);
           
           // Send SMS notification
@@ -321,7 +325,7 @@ export async function POST(request: NextRequest) {
             confirmationStatus: 'pending',
             pendingOrderId: null,
             isConnectedToOrder: false,
-            notes: `STK Push AMOUNT MISMATCH for order ${order.orderNumber}. Expected: KES ${requestedAmount}, Received: KES ${amountPaid}, Order Total: KES ${orderTotal}, Remaining: KES ${currentRemainingBalance}. Requires manual connection.`
+            notes: `STK Push AMOUNT MISMATCH for order ${order.orderNumber}. Requested: ${requestedPhoneNumber}, Paid: ${actualPhoneNumber}. Expected: KES ${requestedAmount}, Received: KES ${amountPaid}, Order Total: KES ${orderTotal}, Remaining: KES ${currentRemainingBalance}. Requires manual connection.`
           });
 
           await mpesaTransaction.save();
@@ -339,6 +343,7 @@ export async function POST(request: NextRequest) {
           });
 
           console.log(`🔴 STK Push AMOUNT MISMATCH for order ${order.orderNumber}: Expected KES ${requestedAmount}, Received KES ${amountPaid} - Receipt: ${mpesaReceiptNumber}`);
+          console.log(`📱 Phone Tracking: Requested ${requestedPhoneNumber} → Paid ${actualPhoneNumber}`);
           console.log(`🔗 Transaction created as unmatched. Requires manual admin connection.`);
         } catch (transactionError) {
           console.error('Error storing unmatched STK Push transaction:', transactionError);
@@ -361,7 +366,7 @@ export async function POST(request: NextRequest) {
           confirmationStatus: 'pending',
           pendingOrderId: null,
           isConnectedToOrder: false,
-          notes: `STK Push payment for order ${order.orderNumber}. Amount: KES ${amountPaid}. Requires manual review.`
+                      notes: `STK Push payment for order ${order.orderNumber}. Requested: ${requestedPhoneNumber}, Paid: ${actualPhoneNumber}. Amount: KES ${amountPaid}. Requires manual review.`
         });
         await mpesaTransaction.save();
       }

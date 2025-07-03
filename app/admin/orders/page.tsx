@@ -1606,6 +1606,23 @@ export default function OrdersPage() {
                                 )}
                               </>
                             )}
+                            
+                            {/* Payment Phone Number (if different from customer phone) */}
+                            {(order.mpesaPayment?.phoneNumber || order.phoneNumber) && 
+                             (order.mpesaPayment?.phoneNumber || order.phoneNumber) !== order.customer.phone && (
+                              <div className="flex justify-between text-xs mt-1 pt-1 border-t border-amber-100">
+                                <span className="text-blue-700 font-medium">Payment Phone:</span>
+                                <span className="text-blue-700 font-mono">{(order.mpesaPayment?.phoneNumber || order.phoneNumber)}</span>
+                              </div>
+                            )}
+                            
+                            {/* M-Pesa Receipt Number */}
+                            {(order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber) && (
+                              <div className="flex justify-between text-xs mt-1">
+                                <span className="text-purple-700 font-medium">Receipt:</span>
+                                <span className="text-purple-700 font-mono">{(order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber)}</span>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -2250,6 +2267,39 @@ export default function OrdersPage() {
                               <strong>Payment History:</strong> {selectedOrder.partialPayments.length} payment{selectedOrder.partialPayments.length > 1 ? 's' : ''} made
                             </>
                           )}
+                        </div>
+                      )}
+                      
+                      {/* Payment Information (if paid or partial) */}
+                      {(selectedOrder.paymentStatus === 'paid' || selectedOrder.paymentStatus === 'partial') && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <h5 className="text-sm text-gray-500 mb-2">Payment Details</h5>
+                          <div className="space-y-2">
+                            {/* Payment Phone Number (if different from customer phone) */}
+                            {(selectedOrder.mpesaPayment?.phoneNumber || selectedOrder.phoneNumber) && 
+                             (selectedOrder.mpesaPayment?.phoneNumber || selectedOrder.phoneNumber) !== selectedOrder.customer.phone && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Payment Phone:</span>
+                                <span className="font-mono text-blue-600">{(selectedOrder.mpesaPayment?.phoneNumber || selectedOrder.phoneNumber)}</span>
+                              </div>
+                            )}
+                            
+                            {/* M-Pesa Receipt Number */}
+                            {(selectedOrder.mpesaPayment?.mpesaReceiptNumber || selectedOrder.mpesaReceiptNumber) && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Receipt Number:</span>
+                                <span className="font-mono text-purple-600">{(selectedOrder.mpesaPayment?.mpesaReceiptNumber || selectedOrder.mpesaReceiptNumber)}</span>
+                              </div>
+                            )}
+                            
+                            {/* Payment Method */}
+                            {selectedOrder.paymentMethod && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Payment Method:</span>
+                                <span className="font-medium text-green-600">{selectedOrder.paymentMethod.toUpperCase()}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
