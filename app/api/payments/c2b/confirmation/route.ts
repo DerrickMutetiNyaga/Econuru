@@ -211,6 +211,48 @@ export async function POST(request: NextRequest) {
 
           await Order.findByIdAndUpdate(order._id, updateData);
 
+          // Create M-Pesa transaction record for matched order
+          try {
+            const customerName = [firstName, middleName, lastName].filter(Boolean).join(' ') || order.customer?.name || 'Unknown Customer';
+            
+            // Check if this transaction already exists
+            const existingTransaction = await MpesaTransaction.findOne({ 
+              transactionId: transID 
+            });
+
+            if (!existingTransaction) {
+              const mpesaTransaction = new MpesaTransaction({
+                transactionId: transID,
+                mpesaReceiptNumber: transID,
+                transactionDate: transactionDate,
+                phoneNumber: originalPhone,
+                amountPaid: amount,
+                transactionType: transactionType,
+                billRefNumber: billRefNumber,
+                thirdPartyTransID: thirdPartyTransID,
+                orgAccountBalance: orgAccountBalance,
+                customerName: customerName,
+                paymentCompletedAt: new Date(),
+                isConnectedToOrder: true,
+                connectedOrderId: order._id,
+                connectedAt: new Date(),
+                connectedBy: 'SYSTEM',
+                confirmationStatus: 'confirmed',
+                confirmedBy: 'SYSTEM',
+                confirmedCustomerName: customerName,
+                confirmedAt: new Date(),
+                notes: `AUTO-CONFIRMED: C2B payment matched to order ${order.orderNumber}. Amount: KES ${amount}. ${isFullyPaid ? 'Order fully paid.' : `Remaining balance: KES ${newRemainingBalance}`}`
+              });
+
+              await mpesaTransaction.save();
+              console.log(`📝 M-Pesa transaction created for matched order ${order.orderNumber}: ${transID} (KES ${amount})`);
+            } else {
+              console.log(`⚠️ Transaction ${transID} already exists in database`);
+            }
+          } catch (error) {
+            console.error('Error creating M-Pesa transaction for matched order:', error);
+          }
+
           orderUpdated = true;
           
           // Send SMS notification
@@ -359,6 +401,48 @@ export async function POST(request: NextRequest) {
           }
           
           await Order.findByIdAndUpdate(matchedOrder._id, updateData);
+
+          // Create M-Pesa transaction record for intelligently matched order
+          try {
+            const customerName = [firstName, middleName, lastName].filter(Boolean).join(' ') || matchedOrder.customer?.name || 'Unknown Customer';
+            
+            // Check if this transaction already exists
+            const existingTransaction = await MpesaTransaction.findOne({ 
+              transactionId: transID 
+            });
+
+            if (!existingTransaction) {
+              const mpesaTransaction = new MpesaTransaction({
+                transactionId: transID,
+                mpesaReceiptNumber: transID,
+                transactionDate: transactionDate,
+                phoneNumber: originalPhone,
+                amountPaid: amount,
+                transactionType: transactionType,
+                billRefNumber: billRefNumber || 'TILL_PAYMENT',
+                thirdPartyTransID: thirdPartyTransID,
+                orgAccountBalance: orgAccountBalance,
+                customerName: customerName,
+                paymentCompletedAt: new Date(),
+                isConnectedToOrder: true,
+                connectedOrderId: matchedOrder._id,
+                connectedAt: new Date(),
+                connectedBy: 'SYSTEM',
+                confirmationStatus: 'confirmed',
+                confirmedBy: 'SYSTEM',
+                confirmedCustomerName: customerName,
+                confirmedAt: new Date(),
+                notes: `AUTO-CONFIRMED: C2B payment intelligently matched to order ${matchedOrder.orderNumber}. Amount: KES ${amount}. ${isFullyPaid ? 'Order fully paid.' : `Remaining balance: KES ${newRemainingBalance}`}`
+              });
+
+              await mpesaTransaction.save();
+              console.log(`📝 M-Pesa transaction created for intelligently matched order ${matchedOrder.orderNumber}: ${transID} (KES ${amount})`);
+            } else {
+              console.log(`⚠️ Transaction ${transID} already exists in database`);
+            }
+          } catch (error) {
+            console.error('Error creating M-Pesa transaction for intelligently matched order:', error);
+          }
 
           orderUpdated = true;
           

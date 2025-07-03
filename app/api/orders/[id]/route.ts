@@ -1,9 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
+import MpesaTransaction from '@/lib/models/MpesaTransaction';
 import { requireAuth } from '@/lib/auth';
 import { smsService } from '@/lib/sms';
 import { applyLockedInPromotion, updatePromotionStatuses } from '@/lib/promotion-utils';
+
+// Helper function to recalculate payment status for an order
+async function recalculateOrderPaymentStatus(orderId: string) {
+  try {
+    // Find the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      console.error(`Order not found for payment recalculation: ${orderId}`);
+      return false;
+    }
+
+    // Find all M-Pesa transactions connected to this order
+    const connectedTransactions = await MpesaTransaction.find({
+      isConnectedToOrder: true,
+      connectedOrderId: order._id
+    }).lean();
+
+    // Calculate total amount paid from connected transactions
+    const totalPaid = connectedTransactions.reduce((sum, transaction) => {
+      return sum + (transaction.amountPaid || 0);
+    }, 0);
+
+    // Calculate remaining balance
+    const orderTotal = order.totalAmount || 0;
+    const remainingBalance = Math.max(0, orderTotal - totalPaid);
+
+    // Determine payment status
+    let paymentStatus = 'unpaid';
+    if (totalPaid >= orderTotal) {
+      paymentStatus = 'paid';
+    } else if (totalPaid > 0) {
+      paymentStatus = 'partial';
+    }
+
+    // Check if status needs updating
+    const statusChanged = order.paymentStatus !== paymentStatus;
+    const balanceChanged = order.remainingBalance !== remainingBalance;
+
+    if (statusChanged || balanceChanged) {
+      // Update the order
+      await Order.findByIdAndUpdate(order._id, {
+        paymentStatus,
+        remainingBalance,
+        amountPaid: totalPaid > 0 ? totalPaid : undefined,
+        updatedAt: new Date()
+      });
+
+      console.log(`✅ Payment status recalculated for order ${order.orderNumber}:`, {
+        oldStatus: order.paymentStatus,
+        newStatus: paymentStatus,
+        oldBalance: order.remainingBalance,
+        newBalance: remainingBalance,
+        totalPaid,
+        orderTotal,
+        connectedTransactions: connectedTransactions.length
+      });
+
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error(`❌ Error recalculating payment status for order ${orderId}:`, error);
+    return false;
+  }
+}
 
 // PATCH update order
 export const PATCH = requireAuth(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -57,6 +124,27 @@ export const PATCH = requireAuth(async (request: NextRequest, { params }: { para
       { new: true, runValidators: true }
     );
 
+    // Check if order amount changed (discount, total amount, etc.)
+    const amountChanged = (
+      existingOrder.totalAmount !== updatedOrder.totalAmount ||
+      existingOrder.discount !== updatedOrder.discount ||
+      existingOrder.pickDropAmount !== updatedOrder.pickDropAmount
+    );
+
+    // If amount changed, recalculate payment status
+    if (amountChanged) {
+      console.log(`💰 Order amount changed for ${updatedOrder.orderNumber}, recalculating payment status...`);
+      await recalculateOrderPaymentStatus(orderId);
+      
+      // Fetch the updated order with recalculated payment status
+      const recalculatedOrder = await Order.findById(orderId);
+      if (recalculatedOrder) {
+        updatedOrder.paymentStatus = recalculatedOrder.paymentStatus;
+        updatedOrder.remainingBalance = recalculatedOrder.remainingBalance;
+        updatedOrder.amountPaid = recalculatedOrder.amountPaid;
+      }
+    }
+
     // Send SMS notifications for status changes
     try {
       if (updateData.status && updateData.status !== previousStatus) {
@@ -81,7 +169,8 @@ export const PATCH = requireAuth(async (request: NextRequest, { params }: { para
     return NextResponse.json({
       success: true,
       order: updatedOrder,
-      message: 'Order updated successfully'
+      message: 'Order updated successfully',
+      paymentRecalculated: amountChanged
     });
 
   } catch (error) {

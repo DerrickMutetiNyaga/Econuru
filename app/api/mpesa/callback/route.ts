@@ -175,6 +175,9 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // ALWAYS create M-Pesa transaction record for successful STK payments
+      let mpesaTransaction;
+      
       if (isExactAmountMatch) {
         // EXACT AMOUNT MATCH: Auto-process the payment and subtract from balance
         try {
@@ -183,7 +186,7 @@ export async function POST(request: NextRequest) {
           const isFullyPaid = newRemainingBalance === 0;
           
           // Create confirmed transaction record
-          const mpesaTransaction = new MpesaTransaction({
+          mpesaTransaction = new MpesaTransaction({
             transactionId: mpesaReceiptNumber,
             mpesaReceiptNumber: mpesaReceiptNumber,
             transactionDate: transactionDateObj || new Date(),
@@ -197,6 +200,9 @@ export async function POST(request: NextRequest) {
             confirmationStatus: 'confirmed',
             pendingOrderId: order._id,
             isConnectedToOrder: true,
+            connectedOrderId: order._id,
+            connectedAt: new Date(),
+            connectedBy: 'SYSTEM',
             confirmedBy: 'SYSTEM',
             confirmedCustomerName: order.customer?.name || 'Auto-confirmed',
             confirmedAt: new Date(),
@@ -280,7 +286,7 @@ export async function POST(request: NextRequest) {
           console.error('Error processing exact amount match:', transactionError);
           
           // Fallback: Create as unmatched if processing fails
-          const mpesaTransaction = new MpesaTransaction({
+          mpesaTransaction = new MpesaTransaction({
             transactionId: mpesaReceiptNumber,
             mpesaReceiptNumber: mpesaReceiptNumber,
             transactionDate: transactionDateObj || new Date(),
@@ -301,7 +307,7 @@ export async function POST(request: NextRequest) {
       } else {
         // AMOUNT MISMATCH: Create unmatched transaction for manual review
         try {
-          const mpesaTransaction = new MpesaTransaction({
+          mpesaTransaction = new MpesaTransaction({
             transactionId: mpesaReceiptNumber,
             mpesaReceiptNumber: mpesaReceiptNumber,
             transactionDate: transactionDateObj || new Date(),
@@ -337,6 +343,27 @@ export async function POST(request: NextRequest) {
         } catch (transactionError) {
           console.error('Error storing unmatched STK Push transaction:', transactionError);
         }
+      }
+
+      // Ensure transaction was created (fallback for any edge cases)
+      if (!mpesaTransaction) {
+        console.log(`📝 Creating fallback M-Pesa transaction for STK payment: ${mpesaReceiptNumber}`);
+        mpesaTransaction = new MpesaTransaction({
+          transactionId: mpesaReceiptNumber,
+          mpesaReceiptNumber: mpesaReceiptNumber,
+          transactionDate: transactionDateObj || new Date(),
+          phoneNumber: phoneNumber || 'Unknown',
+          amountPaid: amountPaid,
+          transactionType: 'STK_PUSH',
+          billRefNumber: order.orderNumber,
+          customerName: order.customer?.name || 'STK Push Customer',
+          paymentCompletedAt: new Date(),
+          confirmationStatus: 'pending',
+          pendingOrderId: null,
+          isConnectedToOrder: false,
+          notes: `STK Push payment for order ${order.orderNumber}. Amount: KES ${amountPaid}. Requires manual review.`
+        });
+        await mpesaTransaction.save();
       }
 
     } else {
