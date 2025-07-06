@@ -17,6 +17,7 @@ import {
   Save,
   Loader2,
   ImageIcon,
+  VideoIcon,
   Filter,
   Search,
   Grid3X3,
@@ -25,6 +26,7 @@ import {
   Tag,
   ChevronLeft,
   ChevronRight,
+  Play,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -52,7 +54,8 @@ interface GalleryItem {
   _id: string;
   title: string;
   description?: string;
-  imageUrl: string;
+  mediaUrl: string;
+  mediaType: 'image' | 'video';
   category: 'before-after' | 'services' | 'facility' | 'team' | 'other';
   status: 'active' | 'inactive';
   featured: boolean;
@@ -70,9 +73,9 @@ export default function GalleryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedImage, setSelectedImage] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string>("")
-  const [isImageUploading, setIsImageUploading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [mediaPreview, setMediaPreview] = useState<string>("")
+  const [isMediaUploading, setIsMediaUploading] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
@@ -134,26 +137,26 @@ export default function GalleryPage() {
     }))
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file && file.type.startsWith('image/')) {
-      setSelectedImage(file)
+    if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+      setSelectedFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
-        setImagePreview(reader.result as string)
+        setMediaPreview(reader.result as string)
       }
       reader.readAsDataURL(file)
     }
   }
 
-  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     const file = e.dataTransfer.files?.[0]
-    if (file && file.type.startsWith('image/')) {
-      setSelectedImage(file)
+    if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+      setSelectedFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
-        setImagePreview(reader.result as string)
+        setMediaPreview(reader.result as string)
       }
       reader.readAsDataURL(file)
     }
@@ -163,20 +166,23 @@ export default function GalleryPage() {
     e.preventDefault()
   }
 
-  const uploadImage = async (file: File): Promise<string> => {
+  const uploadMedia = async (file: File): Promise<{ url: string; mediaType: string }> => {
     if (!token) {
       throw new Error('No authentication token available')
     }
 
-    // Validate file size before upload (5MB limit)
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    // Validate file size before upload
+    const isImage = file.type.startsWith('image/')
+    const isVideo = file.type.startsWith('video/')
+    const maxSize = isImage ? 5 * 1024 * 1024 : 50 * 1024 * 1024 // 5MB for images, 50MB for videos
+    
     if (file.size > maxSize) {
-      throw new Error(`File size must be less than 5MB. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`)
+      throw new Error(`${isImage ? 'Image' : 'Video'} file size must be less than ${maxSize / (1024 * 1024)}MB. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`)
     }
 
     // Validate file type
-    if (!file.type.startsWith('image/')) {
-      throw new Error('Only image files are allowed')
+    if (!isImage && !isVideo) {
+      throw new Error('Only image and video files are allowed')
     }
 
     const formData = new FormData()
@@ -196,38 +202,35 @@ export default function GalleryPage() {
       
       // Handle specific error cases
       if (response.status === 408) {
-        throw new Error('Upload timeout. Please try again with a smaller image or check your internet connection.')
+        throw new Error('Upload timeout. Please try again with a smaller file or check your internet connection.')
       }
       
-      if (response.status === 400) {
-        throw new Error(errorData.error || 'Invalid file format. Please try a different image.')
-      }
-      
-      throw new Error(errorData.error || `Upload failed: ${response.status}`)
+      throw new Error(errorData.error || 'Upload failed')
     }
 
-    const data = await response.json()
-    if (data.success) {
-      return data.url
+    const result = await response.json()
+    return {
+      url: result.url,
+      mediaType: result.mediaType
     }
-    throw new Error(data.error || 'Image upload failed')
   }
 
   const handleSubmit = async () => {
-    if (!selectedImage) {
-      setSuccessMessage('Please select an image')
+    if (!selectedFile) {
+      setSuccessMessage('Please select a file')
       setShowSuccess(true)
       return
     }
 
     setIsSubmitting(true)
     try {
-      const imageUrl = await uploadImage(selectedImage)
+      const { url, mediaType } = await uploadMedia(selectedFile)
       
       const galleryData = {
         title: formData.title,
         description: formData.description,
-        imageUrl,
+        mediaUrl: url,
+        mediaType,
         category: formData.category,
         featured: formData.featured,
         order: formData.order,
@@ -271,24 +274,26 @@ export default function GalleryPage() {
       featured: item.featured,
       order: item.order,
     })
-    setImagePreview(item.imageUrl)
-    setSelectedImage(null)
+    setMediaPreview(item.mediaUrl)
+    setSelectedFile(null)
     setIsDialogOpen(true)
   }
 
   const handleUpdateItem = async () => {
     setIsSubmitting(true)
     try {
-      let imageUrl = editingItem?.imageUrl || ""
+      let mediaUrl = editingItem?.mediaUrl || ""
       
-      if (selectedImage) {
-        imageUrl = await uploadImage(selectedImage)
+      if (selectedFile) {
+        const { url, mediaType } = await uploadMedia(selectedFile)
+        mediaUrl = url
       }
 
       const galleryData = {
         title: formData.title,
         description: formData.description,
-        imageUrl,
+        mediaUrl,
+        mediaType: selectedFile ? (selectedFile.type.startsWith('video/') ? 'video' : 'image') : editingItem?.mediaType || "image",
         category: formData.category,
         featured: formData.featured,
         order: formData.order,
@@ -414,8 +419,9 @@ export default function GalleryPage() {
       featured: false,
       order: 0,
     })
-    setSelectedImage(null)
-    setImagePreview("")
+    setSelectedFile(null)
+    setMediaPreview("")
+    setEditingItem(null)
   }
 
   const handleDialogClose = () => {
@@ -649,12 +655,33 @@ export default function GalleryPage() {
                   viewMode === 'list' ? 'flex flex-row' : ''
                 }`}>
                   <div className={`relative ${viewMode === 'list' ? 'w-48 h-32' : 'aspect-square'}`}>
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.title}
-                      fill
-                      className="object-cover rounded-t-lg"
-                    />
+                    {item.mediaType === 'video' ? (
+                      <div className="w-full h-full relative">
+                        <video
+                          src={item.mediaUrl}
+                          className="w-full h-full object-cover rounded-t-lg"
+                          muted
+                          onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                          onMouseLeave={(e) => {
+                            const video = e.target as HTMLVideoElement;
+                            video.pause();
+                            video.currentTime = 0;
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                          <div className="w-12 h-12 bg-white/80 rounded-full flex items-center justify-center">
+                            <Play className="w-6 h-6 text-gray-800 ml-1" />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <Image
+                        src={item.mediaUrl}
+                        alt={item.title}
+                        fill
+                        className="object-cover rounded-t-lg"
+                      />
+                    )}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200 rounded-t-lg flex items-center justify-center">
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2">
                         <Button
@@ -818,7 +845,7 @@ export default function GalleryPage() {
             <DialogDescription>
               {editingItem 
                 ? 'Update the gallery item details below.'
-                : 'Add a new image to your gallery with details below.'
+                : 'Add a new image or video to your gallery with details below.'
               }
             </DialogDescription>
           </DialogHeader>
@@ -877,23 +904,32 @@ export default function GalleryPage() {
             </div>
             
             <div className="space-y-2">
-              <Label>Gallery Image *</Label>
+              <Label>Gallery Media *</Label>
               <div 
                 className="border-2 border-dashed border-gray-300 rounded-xl p-4 sm:p-8 text-center transition-all duration-200 hover:border-accent hover:bg-accent/5 cursor-pointer"
-                onDrop={handleImageDrop}
+                onDrop={handleFileDrop}
                 onDragOver={handleDragOver}
-                onClick={() => document.getElementById('gallery-image')?.click()}
+                onClick={() => document.getElementById('gallery-media')?.click()}
               >
-                {imagePreview ? (
+                {mediaPreview ? (
                   <div className="space-y-4">
                     <div className="relative inline-block">
-                      <Image
-                        src={imagePreview}
-                        alt="Preview"
-                        width={200}
-                        height={150}
-                        className="mx-auto rounded-lg object-cover border-2 border-gray-200"
-                      />
+                      {selectedFile?.type.startsWith('video/') ? (
+                        <video
+                          src={mediaPreview}
+                          className="mx-auto rounded-lg object-cover border-2 border-gray-200 w-[200px] h-[150px]"
+                          controls
+                          muted
+                        />
+                      ) : (
+                        <Image
+                          src={mediaPreview}
+                          alt="Preview"
+                          width={200}
+                          height={150}
+                          className="mx-auto rounded-lg object-cover border-2 border-gray-200"
+                        />
+                      )}
                       <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-200 rounded-lg flex items-center justify-center">
                         <div className="opacity-0 hover:opacity-100 transition-opacity duration-200">
                           <Upload className="w-8 h-8 text-white" />
@@ -906,19 +942,19 @@ export default function GalleryPage() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          document.getElementById('gallery-image')?.click()
+                          document.getElementById('gallery-media')?.click()
                         }}
                       >
                         <Upload className="mr-2 w-4 h-4" />
-                        Change Image
+                        Change Media
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setSelectedImage(null)
-                          setImagePreview("")
+                          setSelectedFile(null)
+                          setMediaPreview("")
                         }}
                       >
                         <Trash2 className="mr-2 w-4 h-4" />
@@ -931,21 +967,21 @@ export default function GalleryPage() {
                     <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 rounded-full bg-accent/10 flex items-center justify-center">
                       <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-medium mb-2">Upload Gallery Image</h3>
+                    <h3 className="text-base sm:text-lg font-medium mb-2">Upload Gallery Media</h3>
                     <p className="text-sm text-text-light mb-3 sm:mb-4">
-                      Drag and drop an image here, or click to browse
+                      Drag and drop an image or video here, or click to browse
                     </p>
                     <p className="text-xs text-text-light">
-                      Supports: JPG, PNG, GIF (Max 5MB)
+                      Supports: JPG, PNG, GIF (Max 5MB), MP4 (Max 50MB)
                     </p>
                   </>
                 )}
                 <Input 
                   type="file" 
                   className="hidden" 
-                  id="gallery-image"
-                  accept="image/*"
-                  onChange={handleImageChange}
+                  id="gallery-media"
+                  accept="image/*,video/*"
+                  onChange={handleFileChange}
                 />
               </div>
             </div>

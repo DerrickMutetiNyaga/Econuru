@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, VideoIcon, Play } from "lucide-react";
 
 // Replace with your actual green and brown
 const luxuryGreen = "#3A7D5D"; // Example: deep, elegant green
@@ -16,7 +16,8 @@ interface GalleryItem {
   _id: string;
   title: string;
   description?: string;
-  imageUrl: string;
+  mediaUrl: string;
+  mediaType: 'image' | 'video';
   category: string;
   status: string;
   featured: boolean;
@@ -111,17 +112,44 @@ export default function PublicGalleryPage() {
                   onKeyDown={e => { if (e.key === 'Enter') { setSelectedGalleryItem(item); setIsGalleryModalOpen(true); } }}
                 >
                   <div className="relative flex-1">
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.title}
-                      width={400}
-                      height={500}
-                      className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
-                    />
+                    {item.mediaType === 'video' ? (
+                      <div className="w-full h-full relative">
+                        <video
+                          src={item.mediaUrl}
+                          className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+                          muted
+                          onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                          onMouseLeave={(e) => {
+                            const video = e.target as HTMLVideoElement;
+                            video.pause();
+                            video.currentTime = 0;
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[rgba(186,161,129,0.25)] via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-16 h-16 bg-white/80 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                            <Play className="w-8 h-8 text-gray-800 ml-1" />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <Image
+                        src={item.mediaUrl}
+                        alt={item.title}
+                        width={400}
+                        height={500}
+                        className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+                      />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[rgba(186,161,129,0.25)] via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
                   </div>
                   <div className="p-5 pb-6 flex flex-col gap-1">
-                    <h4 className="font-playfair text-lg font-semibold mb-1 truncate" style={{ color: luxuryGreen }}>{item.title}</h4>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-playfair text-lg font-semibold truncate" style={{ color: luxuryGreen }}>{item.title}</h4>
+                      {item.mediaType === 'video' && (
+                        <VideoIcon className="w-4 h-4" style={{ color: luxuryBrown }} />
+                      )}
+                    </div>
                     {item.description && (
                       <p className="text-sm" style={{ color: luxuryBrown }}>{item.description}</p>
                     )}
@@ -139,12 +167,12 @@ export default function PublicGalleryPage() {
             </div>
           )}
         </section>
-        {/* Modal for viewing image */}
+        {/* Modal for viewing media */}
         <AnimatePresence>
           {isGalleryModalOpen && selectedGalleryItem && (
             <Dialog open={isGalleryModalOpen} onOpenChange={setIsGalleryModalOpen}>
               <DialogContent className="max-w-2xl p-0 overflow-hidden bg-transparent shadow-none">
-                <DialogTitle className="sr-only">{selectedGalleryItem.title || "Gallery Image"}</DialogTitle>
+                <DialogTitle className="sr-only">{selectedGalleryItem.title || "Gallery Media"}</DialogTitle>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -162,15 +190,29 @@ export default function PublicGalleryPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
-                  <Image
-                    src={selectedGalleryItem.imageUrl}
-                    alt={selectedGalleryItem.title}
-                    width={800}
-                    height={600}
-                    className="w-full h-[350px] xs:h-[400px] sm:h-[450px] md:h-[500px] object-cover rounded-t-3xl"
-                  />
+                  {selectedGalleryItem.mediaType === 'video' ? (
+                    <video
+                      src={selectedGalleryItem.mediaUrl}
+                      className="w-full h-[350px] xs:h-[400px] sm:h-[450px] md:h-[500px] object-cover rounded-t-3xl"
+                      controls
+                      autoPlay
+                    />
+                  ) : (
+                    <Image
+                      src={selectedGalleryItem.mediaUrl}
+                      alt={selectedGalleryItem.title}
+                      width={800}
+                      height={600}
+                      className="w-full h-[350px] xs:h-[400px] sm:h-[450px] md:h-[500px] object-cover rounded-t-3xl"
+                    />
+                  )}
                   <div className="p-8">
-                    <h3 className="text-2xl font-bold mb-2 font-playfair" style={{ color: luxuryGreen }}>{selectedGalleryItem.title}</h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-2xl font-bold font-playfair" style={{ color: luxuryGreen }}>{selectedGalleryItem.title}</h3>
+                      {selectedGalleryItem.mediaType === 'video' && (
+                        <VideoIcon className="w-6 h-6" style={{ color: luxuryBrown }} />
+                      )}
+                    </div>
                     {selectedGalleryItem.description && (
                       <p className="text-lg" style={{ color: luxuryBrown }}>{selectedGalleryItem.description}</p>
                     )}

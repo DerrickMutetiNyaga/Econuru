@@ -57,14 +57,14 @@ export const POST = requireAdmin(async (request: NextRequest) => {
     await connectDB();
     
     const body = await request.json();
-    const { title, description, imageUrl, category, featured, order } = body;
+    const { title, description, mediaUrl, mediaType, category, featured, order } = body;
     
     console.log('Creating gallery item with data:', body);
     
     // Validate required fields
-    if (!title || !imageUrl) {
+    if (!title || !mediaUrl || !mediaType) {
       return NextResponse.json(
-        { error: 'Title and image URL are required' },
+        { error: 'Title, media URL, and media type are required' },
         { status: 400 }
       );
     }
@@ -72,7 +72,8 @@ export const POST = requireAdmin(async (request: NextRequest) => {
     const galleryItem = new Gallery({
       title,
       description,
-      imageUrl,
+      mediaUrl,
+      mediaType,
       category: category || 'other',
       featured: featured || false,
       order: order || 0,

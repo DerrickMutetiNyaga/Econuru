@@ -6,12 +6,13 @@ import { requireAdmin } from '@/lib/auth';
 // GET /api/gallery/[id] - Get single gallery item
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     
-    const galleryItem = await Gallery.findById(params.id).lean();
+    const { id } = await params;
+    const galleryItem = await Gallery.findById(id).lean();
     
     if (!galleryItem) {
       return NextResponse.json(
@@ -37,15 +38,16 @@ export async function GET(
 // PUT /api/gallery/[id] - Update gallery item (admin only)
 export const PUT = requireAdmin(async (
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
     await connectDB();
     
+    const { id } = await params;
     const body = await request.json();
-    const { title, description, imageUrl, category, status, featured, order } = body;
+    const { title, description, mediaUrl, mediaType, category, status, featured, order } = body;
     
-    const galleryItem = await Gallery.findById(params.id);
+    const galleryItem = await Gallery.findById(id);
     
     if (!galleryItem) {
       return NextResponse.json(
@@ -57,7 +59,8 @@ export const PUT = requireAdmin(async (
     // Update fields if provided
     if (title !== undefined) galleryItem.title = title;
     if (description !== undefined) galleryItem.description = description;
-    if (imageUrl !== undefined) galleryItem.imageUrl = imageUrl;
+    if (mediaUrl !== undefined) galleryItem.mediaUrl = mediaUrl;
+    if (mediaType !== undefined) galleryItem.mediaType = mediaType;
     if (category !== undefined) galleryItem.category = category;
     if (status !== undefined) galleryItem.status = status;
     if (featured !== undefined) galleryItem.featured = featured;
@@ -82,12 +85,13 @@ export const PUT = requireAdmin(async (
 // DELETE /api/gallery/[id] - Delete gallery item (admin only)
 export const DELETE = requireAdmin(async (
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
     await connectDB();
     
-    const galleryItem = await Gallery.findByIdAndDelete(params.id);
+    const { id } = await params;
+    const galleryItem = await Gallery.findByIdAndDelete(id);
     
     if (!galleryItem) {
       return NextResponse.json(

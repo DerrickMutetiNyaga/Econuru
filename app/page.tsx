@@ -30,6 +30,7 @@ import {
   Clock,
   Truck,
   User,
+  Play,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -106,7 +107,8 @@ interface GalleryItem {
   _id: string;
   title: string;
   description?: string;
-  imageUrl: string;
+  mediaUrl: string;
+  mediaType: 'image' | 'video';
   category: 'before-after' | 'services' | 'facility' | 'team' | 'other';
   status: 'active' | 'inactive';
   featured: boolean;
@@ -386,6 +388,8 @@ export default function Home() {
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([])
   const [isLoadingGallery, setIsLoadingGallery] = useState(true)
   const [gallerySlide, setGallerySlide] = useState(0);
+  const [selectedVideo, setSelectedVideo] = useState<GalleryItem | null>(null)
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
   const [banners, setBanners] = useState<Banner[]>([])
   const [currentBanner, setCurrentBanner] = useState(0)
   const [isLoadingBanners, setIsLoadingBanners] = useState(true)
@@ -1184,7 +1188,7 @@ export default function Home() {
 
           {/* Gallery Images Preview */}
           {isLoadingGallery ? (
-            <div className="mt-10 grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-3 md:gap-4">
               {Array.from({ length: 4 }).map((_, index) => (
                 <div key={index} className="aspect-square rounded-xl overflow-hidden luxury-shadow bg-secondary animate-pulse">
                   <div className="w-full h-full bg-gray-200"></div>
@@ -1192,21 +1196,57 @@ export default function Home() {
               ))}
             </div>
           ) : galleryItems.length > 0 ? (
-            <div className="mt-10 grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-3 md:gap-4">
               {galleryItems.slice(0, 8).map((item, index) => (
                 <div
                   key={item._id}
                   className="aspect-square rounded-xl overflow-hidden luxury-shadow bg-white relative"
                   style={{ cursor: 'default' }}
                 >
-                  <Image
-                    src={item.imageUrl}
-                    alt={item.title}
-                    width={300}
-                    height={300}
-                    className="object-cover w-full h-full"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-white p-2 text-xs truncate">
+                  {item.mediaType === 'video' ? (
+                    <div className="w-full h-full relative group">
+                      <video
+                        src={item.mediaUrl}
+                        className="object-cover w-full h-full cursor-pointer"
+                        muted
+                        loop
+                        onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                        onMouseLeave={(e) => {
+                          const video = e.target as HTMLVideoElement;
+                          video.pause();
+                          video.currentTime = 0;
+                        }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedVideo(item);
+                          setIsVideoModalOpen(true);
+                        }}
+                      />
+                      <div 
+                        className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/10 transition-colors cursor-pointer touch-manipulation"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedVideo(item);
+                          setIsVideoModalOpen(true);
+                        }}
+                      >
+                        <div className="w-10 h-10 md:w-12 md:h-12 bg-white/90 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Play className="w-5 h-5 md:w-6 md:h-6 text-gray-800 ml-0.5 md:ml-1" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <Image
+                      src={item.mediaUrl}
+                      alt={item.title}
+                      width={300}
+                      height={300}
+                      className="object-cover w-full h-full"
+                    />
+                  )}
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-white p-2 text-xs md:text-sm truncate">
                     {item.title}
                   </div>
                 </div>
@@ -1230,6 +1270,34 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Video Modal */}
+      <Dialog open={isVideoModalOpen} onOpenChange={setIsVideoModalOpen}>
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[95vh] p-0 bg-black mx-auto">
+          <DialogHeader className="p-4 md:p-6 pb-0">
+            <DialogTitle className="text-white text-lg md:text-xl">{selectedVideo?.title}</DialogTitle>
+            {selectedVideo?.description && (
+              <DialogDescription className="text-gray-300 text-sm md:text-base">
+                {selectedVideo.description}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <div className="p-4 md:p-6 pt-2">
+            {selectedVideo && (
+              <video
+                src={selectedVideo.mediaUrl}
+                className="w-full h-auto max-h-[60vh] md:max-h-[70vh] object-contain"
+                controls
+                autoPlay
+                loop
+                playsInline
+              >
+                Your browser does not support the video tag.
+              </video>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 export interface IGallery extends mongoose.Document {
   title: string;
   description?: string;
-  imageUrl: string; // Cloudinary URL
+  mediaUrl: string; // Cloudinary URL for image or video
+  mediaType: 'image' | 'video'; // Type of media
   category: 'before-after' | 'services' | 'facility' | 'team' | 'other';
   status: 'active' | 'inactive';
   featured: boolean;
@@ -24,9 +25,15 @@ const gallerySchema = new mongoose.Schema<IGallery>({
     trim: true,
     maxlength: [500, 'Description cannot exceed 500 characters'],
   },
-  imageUrl: {
+  mediaUrl: {
     type: String,
-    required: [true, 'Image URL is required'],
+    required: [true, 'Media URL is required'],
+  },
+  mediaType: {
+    type: String,
+    enum: ['image', 'video'],
+    required: [true, 'Media type is required'],
+    default: 'image',
   },
   category: {
     type: String,

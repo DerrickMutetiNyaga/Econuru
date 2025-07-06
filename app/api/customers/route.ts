@@ -45,6 +45,27 @@ export const POST = requireAdmin(async (req: NextRequest) => {
     await dbConnect();
     const body = await req.json();
     
+    // Phone validation
+    const isValidPhone = (phone: string | undefined) => {
+      if (!phone) return false;
+      const cleaned = phone.replace(/\s+/g, '');
+      if (
+        (cleaned.length === 64 && /^[a-f0-9]+$/i.test(cleaned)) ||
+        cleaned === 'Data Error' ||
+        cleaned === 'Unknown' ||
+        !/^\d{10,15}$/.test(cleaned)
+      ) {
+        return false;
+      }
+      return true;
+    };
+    if (!isValidPhone(body.phone)) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid phone number. Client not created.' },
+        { status: 400 }
+      );
+    }
+
     // Check for existing customer with same phone or email
     const existingCustomer = await Customer.findOne({
       $or: [
