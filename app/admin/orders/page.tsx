@@ -34,6 +34,7 @@ import {
   List,
   Link2,
   Calculator,
+  Printer,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1166,6 +1167,262 @@ export default function OrdersPage() {
     return true;
   };
 
+  // Print receipt function
+  const printReceipt = (order: Order) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const receiptContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Receipt - ${order.orderNumber}</title>
+        <style>
+          body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            background: white;
+            color: black;
+          }
+          .receipt {
+            max-width: 400px;
+            margin: 0 auto;
+            border: 2px solid #000;
+            padding: 20px;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+          }
+          .business-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+          }
+          .business-tagline {
+            font-size: 14px;
+            margin-bottom: 5px;
+          }
+          .order-info {
+            margin-bottom: 20px;
+          }
+          .order-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+          }
+          .customer-info {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 10px;
+          }
+          .services {
+            margin-bottom: 20px;
+          }
+          .service-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+          }
+          .service-details {
+            font-size: 12px;
+            color: #666;
+            margin-left: 20px;
+          }
+          .totals {
+            border-top: 2px solid #000;
+            padding-top: 10px;
+            margin-top: 20px;
+          }
+          .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+          }
+          .final-total {
+            font-size: 18px;
+            font-weight: bold;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+            margin-top: 10px;
+          }
+          .payment-status {
+            text-align: center;
+            margin: 20px 0;
+            padding: 10px;
+            border: 2px solid #000;
+          }
+          .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 12px;
+          }
+          .thank-you {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+          }
+          @media print {
+            body { margin: 0; }
+            .receipt { border: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="header">
+            <div class="business-name">ECONURU LAUNDRY</div>
+            <div class="business-tagline">Professional Laundry Services</div>
+            <div style="font-size: 12px;">Quality Care for Your Garments</div>
+          </div>
+
+          <div class="order-info">
+            <div class="order-row">
+              <span><strong>Order #:</strong></span>
+              <span>${order.orderNumber}</span>
+            </div>
+            <div class="order-row">
+              <span><strong>Date:</strong></span>
+              <span>${formatDate(order.createdAt)}</span>
+            </div>
+            <div class="order-row">
+              <span><strong>Time:</strong></span>
+              <span>${new Date(order.createdAt).toLocaleTimeString()}</span>
+            </div>
+            ${order.pickupDate ? `
+            <div class="order-row">
+              <span><strong>Pickup:</strong></span>
+              <span>${order.pickupDate}${order.pickupTime ? ' ' + order.pickupTime : ''}</span>
+            </div>
+            ` : ''}
+          </div>
+
+          <div class="customer-info">
+            <div class="order-row">
+              <span><strong>Customer:</strong></span>
+              <span>${order.customer.name}</span>
+            </div>
+            <div class="order-row">
+              <span><strong>Phone:</strong></span>
+              <span>${order.customer.phone}</span>
+            </div>
+            ${order.customer.email ? `
+            <div class="order-row">
+              <span><strong>Email:</strong></span>
+              <span>${order.customer.email}</span>
+            </div>
+            ` : ''}
+            ${order.customer.address ? `
+            <div class="order-row">
+              <span><strong>Address:</strong></span>
+              <span>${order.customer.address}</span>
+            </div>
+            ` : ''}
+            <div class="order-row">
+              <span><strong>Location:</strong></span>
+              <span>${order.location}</span>
+            </div>
+          </div>
+
+          <div class="services">
+            <div style="text-align: center; margin-bottom: 10px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 5px;">
+              SERVICES
+            </div>
+            ${order.services.map(service => `
+              <div class="service-item">
+                <div>
+                  <div><strong>${service.serviceName}</strong></div>
+                  <div class="service-details">Qty: ${service.quantity} × Ksh ${parseFloat(service.price).toLocaleString()}</div>
+                </div>
+                <div><strong>Ksh ${(parseFloat(service.price) * service.quantity).toLocaleString()}</strong></div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="totals">
+            <div class="total-row">
+              <span>Subtotal:</span>
+              <span>Ksh ${(order.totalAmount - (order.pickDropAmount || 0) + (order.discount || 0) + (order.promoDiscount || 0)).toLocaleString()}</span>
+            </div>
+            ${(order.pickDropAmount || 0) > 0 ? `
+            <div class="total-row">
+              <span>Pick & Drop:</span>
+              <span>+Ksh ${(order.pickDropAmount || 0).toLocaleString()}</span>
+            </div>
+            ` : ''}
+            ${(order.discount || 0) > 0 ? `
+            <div class="total-row">
+              <span>Discount:</span>
+              <span>-Ksh ${(order.discount || 0).toLocaleString()}</span>
+            </div>
+            ` : ''}
+            ${(order.promoDiscount || 0) > 0 ? `
+            <div class="total-row">
+              <span>Promo Discount:</span>
+              <span>-Ksh ${(order.promoDiscount || 0).toLocaleString()}</span>
+            </div>
+            ` : ''}
+            <div class="final-total">
+              <div class="total-row">
+                <span>TOTAL:</span>
+                <span>Ksh ${(order.totalAmount || 0).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="payment-status">
+            <div style="font-weight: bold; margin-bottom: 5px;">PAYMENT STATUS</div>
+            <div style="font-size: 18px; font-weight: bold; color: ${(order.paymentStatus || 'unpaid') === 'paid' ? 'green' : (order.paymentStatus || 'unpaid') === 'partial' ? 'orange' : 'red'};">
+              ${(order.paymentStatus || 'unpaid').toUpperCase()}
+            </div>
+            ${(order.paymentStatus || 'unpaid') === 'partial' && order.remainingBalance ? `
+            <div style="margin-top: 5px; font-size: 14px;">
+              Paid: Ksh ${((order.totalAmount || 0) - (order.remainingBalance || 0)).toLocaleString()}<br>
+              Remaining: Ksh ${(order.remainingBalance || 0).toLocaleString()}
+            </div>
+            ` : ''}
+            ${(order.paymentStatus === 'paid' || order.paymentStatus === 'partial') && (order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber) ? `
+            <div style="margin-top: 5px; font-size: 12px;">
+              Receipt: ${order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber}
+            </div>
+            ` : ''}
+          </div>
+
+          ${order.notes ? `
+          <div style="margin: 20px 0; padding: 10px; border: 1px solid #000;">
+            <div style="font-weight: bold; margin-bottom: 5px;">NOTES:</div>
+            <div>${order.notes}</div>
+          </div>
+          ` : ''}
+
+          <div class="footer">
+            <div class="thank-you">Thank You for Choosing Econuru!</div>
+            <div>For inquiries: +254 XXX XXX XXX</div>
+            <div>Email: info@econuru.com</div>
+            <div style="margin-top: 10px; font-size: 10px;">
+              This receipt serves as proof of order placement.<br>
+              Please keep it safe for order tracking.
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(receiptContent);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Wait for content to load then print
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1755,6 +2012,18 @@ export default function OrdersPage() {
                         variant="outline"
                         onClick={(e) => {
                           e.stopPropagation();
+                          printReceipt(order);
+                        }}
+                        className="flex-1 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
+                      >
+                        <Printer className="w-4 h-4" />
+                        Print Receipt
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handleEditOrder(order);
                         }}
                         className="flex-1 border-mint-green text-mint-green hover:bg-mint-green hover:text-white"
@@ -1918,6 +2187,17 @@ export default function OrdersPage() {
                           className="text-gray-600 hover:text-gray-900"
                         >
                           <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            printReceipt(order);
+                          }}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          <Printer className="w-4 h-4" />
                         </Button>
                         {order.status === 'pending' && (
                           <Button
@@ -2408,6 +2688,14 @@ export default function OrdersPage() {
           )}
 
           <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => selectedOrder && printReceipt(selectedOrder)}
+              className="flex items-center gap-2"
+            >
+              <Printer className="w-4 h-4" />
+              Print Receipt
+            </Button>
             <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
               Close
             </Button>
