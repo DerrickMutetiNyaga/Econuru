@@ -35,6 +35,7 @@ import {
   Link2,
   Calculator,
   Printer,
+  FileText,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1168,11 +1169,9 @@ export default function OrdersPage() {
   };
 
   // Print receipt function
-  const printReceipt = (order: Order) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    const receiptContent = `
+  // Generate receipt HTML content
+  const generateReceiptHTML = (order: Order) => {
+    return `
       <!DOCTYPE html>
       <html>
       <head>
@@ -1411,6 +1410,13 @@ export default function OrdersPage() {
       </body>
       </html>
     `;
+  };
+
+  const printReceipt = (order: Order) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const receiptContent = generateReceiptHTML(order);
 
     printWindow.document.write(receiptContent);
     printWindow.document.close();
@@ -1421,6 +1427,86 @@ export default function OrdersPage() {
       printWindow.print();
       printWindow.close();
     }, 500);
+  };
+
+  const downloadReceiptAsPDF = async (order: Order) => {
+    try {
+      // Dynamically import jsPDF and html2canvas
+      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas')
+      ]);
+
+      // Create a temporary container for the receipt
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '0';
+      tempContainer.style.width = '400px';
+      tempContainer.style.background = 'white';
+      tempContainer.style.padding = '20px';
+      tempContainer.style.fontFamily = 'Courier New, monospace';
+      tempContainer.style.color = 'black';
+      tempContainer.style.border = '2px solid #000';
+      tempContainer.innerHTML = generateReceiptHTML(order).replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<head>[\s\S]*?<\/head>/g, '').replace(/<html>|<\/html>|<body>|<\/body>/g, '');
+
+      document.body.appendChild(tempContainer);
+
+      // Wait a bit for the content to render
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Convert to canvas
+      const canvas = await html2canvas(tempContainer, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: 400,
+        height: tempContainer.scrollHeight
+      });
+
+      // Remove the temporary container
+      document.body.removeChild(tempContainer);
+
+      // Create PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 295; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add additional pages if needed
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Download the PDF
+      pdf.save(`receipt-${order.orderNumber}-${formatDate(order.createdAt)}.pdf`);
+
+      toast({
+        title: "PDF Downloaded",
+        description: `Receipt for order ${order.orderNumber} has been downloaded as PDF.`,
+      });
+
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "PDF Generation Failed",
+        description: "There was an error generating the PDF. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading) {
@@ -2007,18 +2093,41 @@ export default function OrdersPage() {
                           Accept Order
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          printReceipt(order);
-                        }}
-                        className="flex-1 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
-                      >
-                        <Printer className="w-4 h-4" />
-                        Print Receipt
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex-1 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
+                          >
+                            <Printer className="w-4 h-4" />
+                            Receipt
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              printReceipt(order);
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Printer className="w-4 h-4" />
+                            Print Receipt
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadReceiptAsPDF(order);
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <FileText className="w-4 h-4" />
+                            Download PDF
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       <Button
                         size="sm"
                         variant="outline"
@@ -2188,17 +2297,40 @@ export default function OrdersPage() {
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            printReceipt(order);
-                          }}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                printReceipt(order);
+                              }}
+                              className="flex items-center gap-2"
+                            >
+                              <Printer className="w-4 h-4" />
+                              Print Receipt
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                downloadReceiptAsPDF(order);
+                              }}
+                              className="flex items-center gap-2"
+                            >
+                              <FileText className="w-4 h-4" />
+                              Download PDF
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         {order.status === 'pending' && (
                           <Button
                             size="sm"
@@ -2688,17 +2820,38 @@ export default function OrdersPage() {
           )}
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => selectedOrder && printReceipt(selectedOrder)}
-              className="flex items-center gap-2"
-            >
-              <Printer className="w-4 h-4" />
-              Print Receipt
-            </Button>
-            <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
-              Close
-            </Button>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="flex items-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Receipt
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem 
+                    onClick={() => selectedOrder && printReceipt(selectedOrder)}
+                    className="flex items-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Print Receipt
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => selectedOrder && downloadReceiptAsPDF(selectedOrder)}
+                    className="flex items-center gap-2"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Download PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
+                Close
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
