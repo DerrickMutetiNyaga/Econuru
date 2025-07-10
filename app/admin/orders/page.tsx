@@ -1399,9 +1399,9 @@ export default function OrdersPage() {
 
           <div class="footer">
             <div class="thank-you">Thank You for Choosing Econuru!</div>
-            <div>For inquiries: +254 XXX XXX XXX</div>
-            <div>Email: info@econuru.com</div>
-            <div style="margin-top: 10px; font-size: 10px;">
+            <div style="font-size: 13px; margin-bottom: 2px;">For inquiries: <span style="white-space: nowrap;">+254757883799</span></div>
+            <div style="font-size: 13px; margin-bottom: 16px; word-break: break-all;"><span style="font-weight: bold;">Email:</span> info@econuru.com</div>
+            <div style="margin-top: 0; font-size: 10px;">
               This receipt serves as proof of order placement.<br>
               Please keep it safe for order tracking.
             </div>
