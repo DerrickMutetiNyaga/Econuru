@@ -1238,13 +1238,13 @@ export default function Home() {
                       </div>
                     </div>
                   ) : (
-                    <Image
+                  <Image
                       src={item.mediaUrl}
-                      alt={item.title}
-                      width={300}
-                      height={300}
-                      className="object-cover w-full h-full"
-                    />
+                    alt={item.title}
+                    width={300}
+                    height={300}
+                    className="object-cover w-full h-full"
+                  />
                   )}
                   <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-white p-2 text-xs md:text-sm truncate">
                     {item.title}

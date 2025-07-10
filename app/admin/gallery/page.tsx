@@ -675,12 +675,12 @@ export default function GalleryPage() {
                         </div>
                       </div>
                     ) : (
-                      <Image
+                    <Image
                         src={item.mediaUrl}
-                        alt={item.title}
-                        fill
-                        className="object-cover rounded-t-lg"
-                      />
+                      alt={item.title}
+                      fill
+                      className="object-cover rounded-t-lg"
+                    />
                     )}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200 rounded-t-lg flex items-center justify-center">
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2">
@@ -922,13 +922,13 @@ export default function GalleryPage() {
                           muted
                         />
                       ) : (
-                        <Image
+                      <Image
                           src={mediaPreview}
-                          alt="Preview"
-                          width={200}
-                          height={150}
-                          className="mx-auto rounded-lg object-cover border-2 border-gray-200"
-                        />
+                        alt="Preview"
+                        width={200}
+                        height={150}
+                        className="mx-auto rounded-lg object-cover border-2 border-gray-200"
+                      />
                       )}
                       <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors duration-200 rounded-lg flex items-center justify-center">
                         <div className="opacity-0 hover:opacity-100 transition-opacity duration-200">

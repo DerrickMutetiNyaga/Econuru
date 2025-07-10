@@ -43,6 +43,7 @@ const PAGE_LABELS: { [key: string]: string } = {
   gallery: 'Gallery',
   testimonials: 'Testimonials',
   promotions: 'Promotions',
+  'mpesa-transactions': 'M-Pesa Transactions',
   settings: 'Settings'
 };
 
@@ -59,6 +60,7 @@ const PAGE_DESCRIPTIONS: { [key: string]: string } = {
   gallery: 'Manage image gallery',
   testimonials: 'Manage customer testimonials',
   promotions: 'Configure promotional offers',
+  'mpesa-transactions': 'Manage M-Pesa payment transactions',
   settings: 'System configuration and settings'
 };
 
@@ -76,6 +78,7 @@ const DEFAULT_PERMISSIONS: PagePermission[] = [
   { page: 'gallery', canView: true, canEdit: false, canDelete: false },
   { page: 'testimonials', canView: true, canEdit: false, canDelete: false },
   { page: 'promotions', canView: true, canEdit: false, canDelete: false },
+  { page: 'mpesa-transactions', canView: true, canEdit: true, canDelete: false },
   { page: 'settings', canView: false, canEdit: false, canDelete: false }
 ];
 
@@ -87,34 +90,21 @@ export default function UserPermissionsModal({ user, isOpen, onClose, onSave }: 
 
   useEffect(() => {
     if (user && isOpen) {
-      // Handle cases where pagePermissions might be undefined or not an array
+      // Merge user's permissions with all possible pages
       let userPermissions: PagePermission[] = [];
-      
+      const userPermMap = new Map<string, PagePermission>();
       if (user.pagePermissions && Array.isArray(user.pagePermissions)) {
-        userPermissions = [...user.pagePermissions];
-      } else {
-        // Use default permissions based on user role
-        userPermissions = DEFAULT_PERMISSIONS.map(perm => {
-          if (user.role === 'superadmin') {
-            return { ...perm, canView: true, canEdit: true, canDelete: true };
-          } else if (user.role === 'admin') {
-            return {
-              ...perm,
-              canView: true,
-              canEdit: ['dashboard', 'orders', 'pos', 'customers', 'services', 'categories'].includes(perm.page),
-              canDelete: ['orders', 'customers'].includes(perm.page)
-            };
-          } else {
-            return {
-              ...perm,
-              canView: ['dashboard', 'orders', 'pos', 'customers'].includes(perm.page),
-              canEdit: ['orders', 'pos'].includes(perm.page),
-              canDelete: false
-            };
-          }
-        });
+        for (const perm of user.pagePermissions) {
+          userPermMap.set(perm.page, perm);
+        }
       }
-      
+      userPermissions = DEFAULT_PERMISSIONS.map(defaultPerm => {
+        const userPerm = userPermMap.get(defaultPerm.page);
+        if (userPerm) {
+          return { ...defaultPerm, ...userPerm };
+        }
+        return { ...defaultPerm };
+      });
       setPermissions(userPermissions);
       setMessage('');
       setError('');

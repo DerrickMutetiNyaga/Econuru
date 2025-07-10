@@ -31,6 +31,7 @@ import { motion } from 'framer-motion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 interface MpesaTransaction {
   _id: string;
@@ -489,15 +490,14 @@ export default function MpesaTransactionsPage() {
     return idStr.length > maxLength ? idStr.substring(0, maxLength) + '...' : idStr;
   };
 
-  if (!isAdmin) return null;
-
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-6"
-    >
+    <ProtectedRoute requiredPermission="mpesa-transactions">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="space-y-6"
+      >
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -1233,6 +1233,7 @@ export default function MpesaTransactionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </motion.div>
+      </motion.div>
+    </ProtectedRoute>
   );
 } 

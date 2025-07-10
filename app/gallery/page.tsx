@@ -133,13 +133,13 @@ export default function PublicGalleryPage() {
                         </div>
                       </div>
                     ) : (
-                      <Image
+                    <Image
                         src={item.mediaUrl}
-                        alt={item.title}
-                        width={400}
-                        height={500}
-                        className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
-                      />
+                      alt={item.title}
+                      width={400}
+                      height={500}
+                      className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+                    />
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[rgba(186,161,129,0.25)] via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
                   </div>
@@ -198,13 +198,13 @@ export default function PublicGalleryPage() {
                       autoPlay
                     />
                   ) : (
-                    <Image
+                  <Image
                       src={selectedGalleryItem.mediaUrl}
-                      alt={selectedGalleryItem.title}
-                      width={800}
-                      height={600}
-                      className="w-full h-[350px] xs:h-[400px] sm:h-[450px] md:h-[500px] object-cover rounded-t-3xl"
-                    />
+                    alt={selectedGalleryItem.title}
+                    width={800}
+                    height={600}
+                    className="w-full h-[350px] xs:h-[400px] sm:h-[450px] md:h-[500px] object-cover rounded-t-3xl"
+                  />
                   )}
                   <div className="p-8">
                     <div className="flex items-center gap-2 mb-2">
