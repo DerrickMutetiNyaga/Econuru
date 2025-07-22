@@ -148,6 +148,15 @@ export async function POST(request: NextRequest) {
       // Don't fail the order creation if SMS fails
     }
 
+    // Send admin notification SMS
+    try {
+      await smsService.sendAdminNewOrderNotification(order);
+      console.log('Admin SMS sent successfully');
+    } catch (adminSmsError) {
+      console.error('Admin SMS sending failed:', adminSmsError);
+      // Don't fail the order creation if admin SMS fails
+    }
+
     return NextResponse.json({
       success: true,
       order,

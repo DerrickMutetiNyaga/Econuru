@@ -216,6 +216,13 @@ Customer care: +254757883799`;
 
     return this.sendSMS(phone, message);
   }
+
+  async sendAdminNewOrderNotification(orderData: any): Promise<SMSResponse> {
+    const adminPhone = "+254757883799";
+    const { customer, orderNumber, pickupDate, pickupTime } = orderData;
+    const message = `New order received!\nName: ${customer.name}\nPhone: ${customer.phone}\nOrder #: ${orderNumber}\nPickup: ${pickupDate} at ${pickupTime}`;
+    return this.sendSMS(adminPhone, message);
+  }
 }
 
 export const smsService = new SMSService();

@@ -41,6 +41,9 @@ export default function ProtectedRoute({
     if (path.startsWith('/admin/banners')) return 'settings';
     if (path.startsWith('/admin/sms')) return 'settings';
     if (path.startsWith('/admin/settings')) return 'settings';
+    // Only map /admin/dashboard to 'dashboard', not /admin itself
+    if (path === '/admin' || path === '/admin/') return '';
+    if (path.startsWith('/admin/dashboard')) return 'dashboard';
     if (path.startsWith('/admin')) return 'dashboard';
     return '';
   };
