@@ -268,7 +268,7 @@ export default function BookPage() {
             <div className="text-center py-12">
               <div className="text-5xl mb-4">🎉</div>
               <h2 className="text-2xl font-bold text-[#38a3a5] mb-2">Booking Received!</h2>
-              <p className="text-gray-700">Thank you for booking with us. We'll contact you soon to confirm your session.</p>
+              <p className="text-gray-700">Thank you for booking with us. We'll contact you soon to confirm your order.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit}>
