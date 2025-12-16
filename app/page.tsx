@@ -604,25 +604,44 @@ export default function Home() {
       })
       
       if (!response.ok) {
+        // Check if response is HTML (error page) instead of JSON
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('text/html')) {
+          const text = await response.text()
+          console.error('❌ Server returned HTML error page:', text.substring(0, 200))
+          throw new Error(`Server error: ${response.status}. Check server logs for details.`)
+        }
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       
+      // Check content type before parsing
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        console.error('❌ Expected JSON but got:', contentType, text.substring(0, 200))
+        throw new Error('Invalid response format')
+      }
+      
       const data = await response.json()
-      if (data.success && data.banners.length > 0) {
+      if (data.success && data.banners && data.banners.length > 0) {
         console.log(`✅ SUCCESS: Banners loaded in ${retryCount + 1} attempts (${data.banners.length} items)`)
         setBanners(data.banners)
         setIsLoadingBanners(false)
         return // Success - stop retrying
       } else {
-        throw new Error('No banners found in response')
+        // Empty banners is okay, just log it
+        console.log('ℹ️ No active banners found')
+        setBanners([])
+        setIsLoadingBanners(false)
+        return
       }
     } catch (error) {
       console.error(`❌ Banner fetch attempt ${retryCount + 1} failed:`, error)
       
       // Retry logic - keep trying until success
-      if (retryCount < 10) { // Max 10 retries
+      if (retryCount < 3) { // Reduced to 3 retries to avoid infinite loops
         const delay = Math.min(1000 * Math.pow(1.5, retryCount), 5000) // Exponential backoff, max 5s
-        console.log(`🔄 Retrying in ${delay}ms... (attempt ${retryCount + 2}/10)`)
+        console.log(`🔄 Retrying in ${delay}ms... (attempt ${retryCount + 2}/3)`)
         
         setTimeout(() => {
           fetchBanners(retryCount + 1)

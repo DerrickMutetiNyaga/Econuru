@@ -1,9 +1,13 @@
 import jwt from 'jsonwebtoken';
 import { NextRequest, NextResponse } from 'next/server';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET is not set in environment variables');
+// Lazy getter for JWT_SECRET - only throws when actually needed
+function getJWTSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not set in environment variables. Please add it to your .env file.');
+  }
+  return secret;
 }
 
 export interface DecodedToken {
@@ -17,7 +21,7 @@ export interface DecodedToken {
 
 export function verifyToken(token: string): DecodedToken | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as DecodedToken;
+    return jwt.verify(token, getJWTSecret()) as DecodedToken;
   } catch (error) {
     return null;
   }

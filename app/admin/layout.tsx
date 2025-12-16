@@ -35,6 +35,7 @@ import { useTheme } from "next-themes"
 import { useAuth } from "@/hooks/useAuth"
 import ProtectedRoute from "@/components/ProtectedRoute"
 import { getAccessibleNavigation } from "@/lib/permissions"
+import { AdminPWASetup } from "@/components/admin-pwa-setup"
 
 function AdminLayoutContent({
   children,
@@ -53,6 +54,30 @@ function AdminLayoutContent({
   useEffect(() => {
     setIsMobileSidebarOpen(false)
   }, [pathname])
+
+  // Add admin manifest link to head
+  useEffect(() => {
+    // Remove any existing admin manifest link
+    const existingLink = document.querySelector('link[rel="manifest"][data-admin="true"]')
+    if (existingLink) {
+      existingLink.remove()
+    }
+
+    // Add admin manifest link
+    const link = document.createElement('link')
+    link.rel = 'manifest'
+    link.href = '/manifest-admin.json'
+    link.setAttribute('data-admin', 'true')
+    document.head.appendChild(link)
+
+    return () => {
+      // Cleanup on unmount
+      const linkToRemove = document.querySelector('link[rel="manifest"][data-admin="true"]')
+      if (linkToRemove) {
+        linkToRemove.remove()
+      }
+    }
+  }, [])
 
   // Handle responsive behavior
   useEffect(() => {
@@ -394,6 +419,7 @@ function AdminLayoutContent({
             </div>
           </main>
         </div>
+        <AdminPWASetup />
       </div>
     </ProtectedRoute>
   )

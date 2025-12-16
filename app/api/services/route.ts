@@ -6,18 +6,32 @@ import { requireAdmin } from '@/lib/auth';
 // GET all services
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    console.log('🚀 Services API: Starting...');
+    const startTime = Date.now();
     
-    const services = await Service.find({}).sort({ createdAt: -1 });
+    await connectDB();
+    const connectTime = Date.now() - startTime;
+    console.log(`⚡ Services API: DB connected in ${connectTime}ms`);
+    
+    const queryStart = Date.now();
+    const services = await Service.find({}).sort({ createdAt: -1 }).lean();
+    const queryTime = Date.now() - queryStart;
+    
+    console.log(`✅ Services API: Found ${services.length} services in ${queryTime}ms (Total: ${Date.now() - startTime}ms)`);
+    console.log(`📊 Active services: ${services.filter((s: any) => s.active !== false).length}`);
     
     return NextResponse.json({
       success: true,
       services,
     });
-  } catch (error) {
-    console.error('Get services error:', error);
+  } catch (error: any) {
+    console.error('❌ Get services error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        success: false,
+        error: error.message || 'Internal server error',
+        message: 'Failed to fetch services'
+      },
       { status: 500 }
     );
   }

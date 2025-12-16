@@ -31,16 +31,14 @@ export default function ServicesPage() {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [services, setServices] = useState<Service[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [heroRef, heroInView] = useInView({
     triggerOnce: true,
     threshold: 0.1,
   })
 
-  const [servicesRef, servicesInView] = useInView({
-    triggerOnce: true,
-    threshold: 0.1,
-  })
+  // Removed intersection observer - was causing services not to display
 
   const categories = [
     { id: "all", name: "All Services" },
@@ -59,16 +57,67 @@ export default function ServicesPage() {
 
   const fetchServices = async () => {
     try {
+      setIsLoading(true)
       const response = await fetch('/api/services')
-      const data = await response.json()
       
-      if (data.success) {
-        // Only show active services
-        const activeServices = data.services.filter((service: Service) => service.active)
-        setServices(activeServices)
+      if (!response.ok) {
+        // Check if response is HTML (error page) instead of JSON
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('text/html')) {
+          const text = await response.text()
+          console.error('❌ Server returned HTML error page:', text.substring(0, 200))
+          throw new Error(`Server error: ${response.status}. Check server logs for details.`)
+        }
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
-    } catch (error) {
-      console.error('Error fetching services:', error)
+      
+      // Check content type before parsing
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        console.error('❌ Expected JSON but got:', contentType, text.substring(0, 200))
+        throw new Error('Invalid response format')
+      }
+      
+      const data = await response.json()
+      console.log('📦 Services API response:', data)
+      
+      if (data.success && data.services) {
+        console.log(`📦 Raw services from API:`, data.services)
+        
+        // Show all services where active is not explicitly false
+        // (includes true, undefined, or null - defaults to showing them)
+        const activeServices = data.services.filter((service: Service) => {
+          const isActive = service.active !== false
+          console.log(`Service "${service.name}": active=${service.active}, willShow=${isActive}`)
+          return isActive
+        })
+        
+        console.log(`✅ Found ${activeServices.length} active services out of ${data.services.length} total`)
+        
+        // If no active services but we have services, show all (for debugging)
+        if (activeServices.length === 0 && data.services.length > 0) {
+          console.warn('⚠️ No active services found, showing all services for debugging')
+          setServices(data.services)
+        } else {
+          setServices(activeServices)
+        }
+        
+        // Force a re-render check
+        console.log('🔄 Setting services state, count:', activeServices.length || data.services.length)
+      } else if (data.error) {
+        console.error('❌ API returned error:', data.error)
+        setError(data.error || 'Failed to fetch services')
+        setServices([])
+      } else {
+        console.warn('⚠️ Unexpected response format:', data)
+        setError('Unexpected response from server')
+        setServices([])
+      }
+    } catch (error: any) {
+      console.error('❌ Error fetching services:', error)
+      setError(error.message || 'Failed to fetch services. Please try again later.')
+      setServices([])
     } finally {
       setIsLoading(false)
     }
@@ -78,6 +127,7 @@ export default function ServicesPage() {
     selectedCategory === "all" 
       ? services 
       : services.filter((service) => service.category === selectedCategory)
+
 
   const getIconForCategory = (category: string) => {
     switch (category) {
@@ -215,13 +265,7 @@ export default function ServicesPage() {
       </section>
 
       {/* Services Section */}
-      <motion.section
-        ref={servicesRef}
-        className="py-20"
-        initial={{ opacity: 0 }}
-        animate={servicesInView ? { opacity: 1 } : {}}
-        transition={{ duration: 0.8 }}
-      >
+      <section className="py-20">
         <div className="container px-4 md:px-6">
           {/* Category Filter */}
           <div className="flex flex-wrap justify-center gap-3 mb-12">
@@ -241,14 +285,46 @@ export default function ServicesPage() {
             ))}
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="text-center py-8 mb-8">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-w-md mx-auto">
+                <p className="text-red-800 font-medium mb-2">Error Loading Services</p>
+                <p className="text-red-600 text-sm">{error}</p>
+                <Button
+                  onClick={() => {
+                    setError(null)
+                    fetchServices()
+                  }}
+                  className="mt-4"
+                  variant="outline"
+                  size="sm"
+                >
+                  Retry
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Services Grid */}
-          {filteredServices.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p className="text-text-light">Loading services...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <p className="text-red-600 text-lg">Error: {error}</p>
+            </div>
+          ) : filteredServices.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-text-light text-lg">No services found for this category.</p>
+              <p className="text-text-light text-sm mt-2">Please check back later or contact us for more information.</p>
+              <p className="text-text-light text-xs mt-4">Debug: services={services.length}, filtered={filteredServices.length}, category={selectedCategory}</p>
             </div>
           ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredServices.map((service, index) => (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {filteredServices.map((service, index) => (
               <motion.div
                   key={service._id}
                   className="group relative"
@@ -318,11 +394,11 @@ export default function ServicesPage() {
                     </div>
                 </div>
               </motion.div>
-            ))}
+              ))}
             </div>
           )}
         </div>
-      </motion.section>
+      </section>
 
       <Footer />
     </div>
