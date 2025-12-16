@@ -1555,7 +1555,7 @@ export default function OrdersPage() {
                   </div>
                   <div class="mpesa-step">
                     <div>2.</div>
-                    <div>Enter Till Number: <span class="till-number">7092156</span></div>
+                    <div>Enter Till Number: <span class="till-number">5251257</span></div>
                   </div>
                   <div class="mpesa-step">
                     <div>3.</div>
@@ -1586,7 +1586,7 @@ export default function OrdersPage() {
             <div class="contact-row">Phone: +254757883799 | Email: econuruservices@gmail.com</div>
             <div class="mpesa-footer">
               <div class="mpesa-footer-label">M-Pesa Till Number:</div>
-              <div class="till-number" style="font-size: 12px; margin-top: 2px;">7092156</div>
+              <div class="till-number" style="font-size: 12px; margin-top: 2px;">5251257</div>
             </div>
             <div style="margin-top: 4px; font-size: 7px; color: #999;">
               This receipt serves as proof of order placement. Please keep it safe for order tracking.
