@@ -1176,97 +1176,256 @@ export default function OrdersPage() {
       <html>
       <head>
         <title>Receipt - ${order.orderNumber}</title>
+        <meta charset="UTF-8">
         <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; }
           body {
-            font-family: 'Courier New', monospace;
+            font-family: 'Arial', 'Helvetica', sans-serif;
             margin: 0;
-            padding: 20px;
-            background: white;
-            color: black;
+            padding: 0;
+            background: #ffffff;
+            color: #1a1a1a;
+            font-size: 9px;
+            line-height: 1.3;
           }
           .receipt {
-            max-width: 400px;
+            max-width: 21cm;
             margin: 0 auto;
-            border: 2px solid #000;
-            padding: 20px;
+            padding: 8mm;
+            background: white;
           }
           .header {
             text-align: center;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
+            color: white;
+            padding: 10px 15px;
+            margin-bottom: 8px;
+            border-radius: 4px;
           }
           .business-name {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 3px;
+            letter-spacing: 1px;
           }
           .business-tagline {
-            font-size: 14px;
-            margin-bottom: 5px;
+            font-size: 10px;
+            opacity: 0.95;
           }
-          .order-info {
-            margin-bottom: 20px;
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 6px;
+            font-size: 9px;
           }
-          .order-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
+          .info-table td {
+            padding: 4px 8px;
+            border: 1px solid #e0e0e0;
           }
-          .customer-info {
-            margin-bottom: 20px;
-            border-bottom: 1px solid #000;
-            padding-bottom: 10px;
+          .info-table td:first-child {
+            background: #f5f5f5;
+            font-weight: 600;
+            width: 35%;
+            color: #555;
           }
-          .services {
-            margin-bottom: 20px;
+          .info-table td:last-child {
+            background: white;
+            color: #1a1a1a;
           }
-          .service-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
+          .services-table {
+            margin-top: 6px;
+          }
+          .services-table th {
+            background: #2E7D32;
+            color: white;
+            padding: 6px 8px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 10px;
+            text-transform: uppercase;
+          }
+          .services-table td {
+            padding: 5px 8px;
+            border: 1px solid #e0e0e0;
+            vertical-align: top;
+          }
+          .services-table tr:nth-child(even) {
+            background: #f9f9f9;
+          }
+          .service-name {
+            font-weight: 600;
+            color: #1a1a1a;
           }
           .service-details {
+            font-size: 8px;
+            color: #777;
+            margin-top: 2px;
+          }
+          .service-price {
+            text-align: right;
+            font-weight: 600;
+            color: #2E7D32;
+          }
+          .totals-table {
+            margin-top: 6px;
+          }
+          .totals-table td {
+            padding: 4px 8px;
+            border: 1px solid #e0e0e0;
+          }
+          .totals-table td:first-child {
+            background: #f5f5f5;
+            font-weight: 600;
+            width: 70%;
+          }
+          .totals-table td:last-child {
+            text-align: right;
+            font-weight: 600;
+          }
+          .final-total-row td {
+            background: #2E7D32 !important;
+            color: white !important;
             font-size: 12px;
-            color: #666;
-            margin-left: 20px;
+            font-weight: 700;
+            padding: 6px 8px;
+            border: none !important;
           }
-          .totals {
-            border-top: 2px solid #000;
-            padding-top: 10px;
-            margin-top: 20px;
+          .payment-box {
+            margin: 8px 0;
+            border: 2px solid #2E7D32;
+            border-radius: 4px;
+            overflow: hidden;
           }
-          .total-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
+          .payment-header {
+            background: #2E7D32;
+            color: white;
+            padding: 6px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 10px;
+            text-transform: uppercase;
           }
-          .final-total {
-            font-size: 18px;
-            font-weight: bold;
-            border-top: 1px solid #000;
-            padding-top: 10px;
-            margin-top: 10px;
+          .payment-body {
+            padding: 8px;
+            background: #f5f5f5;
+            text-align: center;
           }
           .payment-status {
-            text-align: center;
-            margin: 20px 0;
-            padding: 10px;
-            border: 2px solid #000;
+            font-size: 18px;
+            font-weight: 700;
+            margin: 4px 0;
+            color: ${(order.paymentStatus || 'unpaid') === 'paid' ? '#2E7D32' : (order.paymentStatus || 'unpaid') === 'partial' ? '#ff9800' : '#d32f2f'};
+          }
+          .mpesa-box {
+            margin-top: 8px;
+            padding: 8px;
+            background: #e8f5e9;
+            border: 1px solid #2E7D32;
+            border-radius: 3px;
+            font-size: 8.5px;
+          }
+          .mpesa-title {
+            font-weight: 700;
+            color: #2E7D32;
+            margin-bottom: 5px;
+            font-size: 9px;
+          }
+          .mpesa-steps {
+            display: table;
+            width: 100%;
+          }
+          .mpesa-step {
+            display: table-row;
+          }
+          .mpesa-step > div {
+            display: table-cell;
+            padding: 2px 0;
+          }
+          .mpesa-step > div:first-child {
+            width: 20px;
+            font-weight: 700;
+            color: #2E7D32;
+          }
+          .till-number {
+            display: inline-block;
+            font-size: 14px;
+            font-weight: 700;
+            color: #1976D2;
+            background: white;
+            padding: 3px 8px;
+            border: 2px solid #1976D2;
+            border-radius: 3px;
+            letter-spacing: 1.5px;
+            margin: 2px 0;
+          }
+          .notes-box {
+            margin: 6px 0;
+            padding: 6px;
+            background: #fff9e6;
+            border-left: 3px solid #ff9800;
+            font-size: 8.5px;
           }
           .footer {
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 2px solid #e0e0e0;
             text-align: center;
-            margin-top: 30px;
-            font-size: 12px;
+            font-size: 8px;
+            color: #666;
           }
           .thank-you {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 10px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #2E7D32;
+            margin-bottom: 4px;
+          }
+          .contact-row {
+            margin: 3px 0;
+            font-size: 8px;
+          }
+          .mpesa-footer {
+            margin: 4px 0;
+            padding: 5px;
+            background: #e3f2fd;
+            border: 1px solid #1976D2;
+            border-radius: 3px;
+            display: inline-block;
+          }
+          .mpesa-footer-label {
+            font-weight: 600;
+            color: #1976D2;
+            font-size: 8px;
           }
           @media print {
-            body { margin: 0; }
-            .receipt { border: none; }
+            @page {
+              size: A4;
+              margin: 8mm;
+            }
+            body {
+              font-size: 8.5px;
+              padding: 0;
+            }
+            .receipt {
+              padding: 0;
+              max-width: 100%;
+            }
+            .header {
+              margin-bottom: 6px;
+              padding: 8px 12px;
+            }
+            .business-name {
+              font-size: 18px;
+            }
+            table {
+              margin-bottom: 5px;
+            }
+            .payment-box {
+              margin: 6px 0;
+            }
+            .footer {
+              margin-top: 6px;
+              padding-top: 5px;
+            }
           }
         </style>
       </head>
@@ -1275,135 +1434,162 @@ export default function OrdersPage() {
           <div class="header">
             <div class="business-name">ECONURU LAUNDRY</div>
             <div class="business-tagline">Professional Laundry Services</div>
-            <div style="font-size: 12px;">Quality Care for Your Garments</div>
           </div>
 
-          <div class="order-info">
-            <div class="order-row">
-              <span><strong>Order #:</strong></span>
-              <span>${order.orderNumber}</span>
-            </div>
-            <div class="order-row">
-              <span><strong>Date:</strong></span>
-              <span>${formatDate(order.createdAt)}</span>
-            </div>
-            <div class="order-row">
-              <span><strong>Time:</strong></span>
-              <span>${new Date(order.createdAt).toLocaleTimeString()}</span>
-            </div>
+          <table class="info-table">
+            <tr>
+              <td>Order Number</td>
+              <td><strong>${order.orderNumber}</strong></td>
+            </tr>
+            <tr>
+              <td>Date</td>
+              <td>${formatDate(order.createdAt)}</td>
+            </tr>
+            <tr>
+              <td>Time</td>
+              <td>${new Date(order.createdAt).toLocaleTimeString()}</td>
+            </tr>
             ${order.pickupDate ? `
-            <div class="order-row">
-              <span><strong>Pickup:</strong></span>
-              <span>${order.pickupDate}${order.pickupTime ? ' ' + order.pickupTime : ''}</span>
-            </div>
+            <tr>
+              <td>Pickup Date</td>
+              <td>${order.pickupDate}${order.pickupTime ? ' ' + order.pickupTime : ''}</td>
+            </tr>
             ` : ''}
-          </div>
-
-          <div class="customer-info">
-            <div class="order-row">
-              <span><strong>Customer:</strong></span>
-              <span>${order.customer.name}</span>
-            </div>
-            <div class="order-row">
-              <span><strong>Phone:</strong></span>
-              <span>${order.customer.phone}</span>
-            </div>
+            <tr>
+              <td>Customer Name</td>
+              <td><strong>${order.customer.name}</strong></td>
+            </tr>
+            <tr>
+              <td>Phone</td>
+              <td>${order.customer.phone}</td>
+            </tr>
             ${order.customer.email ? `
-            <div class="order-row">
-              <span><strong>Email:</strong></span>
-              <span>${order.customer.email}</span>
-            </div>
+            <tr>
+              <td>Email</td>
+              <td>${order.customer.email}</td>
+            </tr>
             ` : ''}
             ${order.customer.address ? `
-            <div class="order-row">
-              <span><strong>Address:</strong></span>
-              <span>${order.customer.address}</span>
-            </div>
+            <tr>
+              <td>Address</td>
+              <td>${order.customer.address}</td>
+            </tr>
             ` : ''}
-            <div class="order-row">
-              <span><strong>Location:</strong></span>
-              <span>${order.location}</span>
-            </div>
-          </div>
+            <tr>
+              <td>Location</td>
+              <td>${order.location}</td>
+            </tr>
+          </table>
 
-          <div class="services">
-            <div style="text-align: center; margin-bottom: 10px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 5px;">
-              SERVICES
-            </div>
-            ${order.services.map(service => `
-              <div class="service-item">
-                <div>
-                  <div><strong>${service.serviceName}</strong></div>
-                  <div class="service-details">Qty: ${service.quantity} × Ksh ${parseFloat(service.price).toLocaleString()}</div>
-                </div>
-                <div><strong>Ksh ${(parseFloat(service.price) * service.quantity).toLocaleString()}</strong></div>
-              </div>
-            `).join('')}
-          </div>
+          <table class="services-table">
+            <thead>
+              <tr>
+                <th style="width: 60%;">Service</th>
+                <th style="width: 40%; text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.services.map(service => `
+                <tr>
+                  <td>
+                    <div class="service-name">${service.serviceName}</div>
+                    <div class="service-details">Qty: ${service.quantity} × Ksh ${parseFloat(service.price).toLocaleString()}</div>
+                  </td>
+                  <td class="service-price">Ksh ${(parseFloat(service.price) * service.quantity).toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
 
-          <div class="totals">
-            <div class="total-row">
-              <span>Subtotal:</span>
-              <span>Ksh ${(order.totalAmount - (order.pickDropAmount || 0) + (order.discount || 0) + (order.promoDiscount || 0)).toLocaleString()}</span>
-            </div>
+          <table class="totals-table">
+            <tr>
+              <td>Subtotal</td>
+              <td>Ksh ${(order.totalAmount - (order.pickDropAmount || 0) + (order.discount || 0) + (order.promoDiscount || 0)).toLocaleString()}</td>
+            </tr>
             ${(order.pickDropAmount || 0) > 0 ? `
-            <div class="total-row">
-              <span>Pick & Drop:</span>
-              <span>+Ksh ${(order.pickDropAmount || 0).toLocaleString()}</span>
-            </div>
+            <tr>
+              <td>Pick & Drop</td>
+              <td>+Ksh ${(order.pickDropAmount || 0).toLocaleString()}</td>
+            </tr>
             ` : ''}
             ${(order.discount || 0) > 0 ? `
-            <div class="total-row">
-              <span>Discount:</span>
-              <span>-Ksh ${(order.discount || 0).toLocaleString()}</span>
-            </div>
+            <tr>
+              <td>Discount</td>
+              <td>-Ksh ${(order.discount || 0).toLocaleString()}</td>
+            </tr>
             ` : ''}
             ${(order.promoDiscount || 0) > 0 ? `
-            <div class="total-row">
-              <span>Promo Discount:</span>
-              <span>-Ksh ${(order.promoDiscount || 0).toLocaleString()}</span>
-            </div>
+            <tr>
+              <td>Promo Discount</td>
+              <td>-Ksh ${(order.promoDiscount || 0).toLocaleString()}</td>
+            </tr>
             ` : ''}
-            <div class="final-total">
-              <div class="total-row">
-                <span>TOTAL:</span>
-                <span>Ksh ${(order.totalAmount || 0).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
+            <tr class="final-total-row">
+              <td>TOTAL</td>
+              <td>Ksh ${(order.totalAmount || 0).toLocaleString()}</td>
+            </tr>
+          </table>
 
-          <div class="payment-status">
-            <div style="font-weight: bold; margin-bottom: 5px;">PAYMENT STATUS</div>
-            <div style="font-size: 18px; font-weight: bold; color: ${(order.paymentStatus || 'unpaid') === 'paid' ? 'green' : (order.paymentStatus || 'unpaid') === 'partial' ? 'orange' : 'red'};">
-              ${(order.paymentStatus || 'unpaid').toUpperCase()}
+          <div class="payment-box">
+            <div class="payment-header">Payment Status</div>
+            <div class="payment-body">
+              <div class="payment-status">${(order.paymentStatus || 'unpaid').toUpperCase()}</div>
+              ${(order.paymentStatus || 'unpaid') === 'partial' && order.remainingBalance ? `
+              <div style="font-size: 9px; margin-top: 4px;">
+                Paid: Ksh ${((order.totalAmount || 0) - (order.remainingBalance || 0)).toLocaleString()} | 
+                Remaining: Ksh ${(order.remainingBalance || 0).toLocaleString()}
+              </div>
+              ` : ''}
+              ${(order.paymentStatus === 'paid' || order.paymentStatus === 'partial') && (order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber) ? `
+              <div style="font-size: 8px; margin-top: 4px; color: #666;">
+                M-Pesa Receipt: ${order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber}
+              </div>
+              ` : ''}
+              ${(order.paymentStatus === 'unpaid' || order.paymentStatus === 'partial') ? `
+              <div class="mpesa-box">
+                <div class="mpesa-title">Pay via M-Pesa</div>
+                <div class="mpesa-steps">
+                  <div class="mpesa-step">
+                    <div>1.</div>
+                    <div>Go to M-Pesa Menu → Pay Bill</div>
+                  </div>
+                  <div class="mpesa-step">
+                    <div>2.</div>
+                    <div>Enter Till Number: <span class="till-number">7092156</span></div>
+                  </div>
+                  <div class="mpesa-step">
+                    <div>3.</div>
+                    <div>Enter Amount: <strong>Ksh ${order.paymentStatus === 'partial' && order.remainingBalance ? order.remainingBalance.toLocaleString() : (order.totalAmount || 0).toLocaleString()}</strong></div>
+                  </div>
+                  <div class="mpesa-step">
+                    <div>4.</div>
+                    <div>Enter your M-Pesa PIN</div>
+                  </div>
+                </div>
+                <div style="margin-top: 5px; font-size: 7.5px; color: #666; font-style: italic;">
+                  Reference: Order #${order.orderNumber}
+                </div>
+              </div>
+              ` : ''}
             </div>
-            ${(order.paymentStatus || 'unpaid') === 'partial' && order.remainingBalance ? `
-            <div style="margin-top: 5px; font-size: 14px;">
-              Paid: Ksh ${((order.totalAmount || 0) - (order.remainingBalance || 0)).toLocaleString()}<br>
-              Remaining: Ksh ${(order.remainingBalance || 0).toLocaleString()}
-            </div>
-            ` : ''}
-            ${(order.paymentStatus === 'paid' || order.paymentStatus === 'partial') && (order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber) ? `
-            <div style="margin-top: 5px; font-size: 12px;">
-              Receipt: ${order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber}
-            </div>
-            ` : ''}
           </div>
 
           ${order.notes ? `
-          <div style="margin: 20px 0; padding: 10px; border: 1px solid #000;">
-            <div style="font-weight: bold; margin-bottom: 5px;">NOTES:</div>
+          <div class="notes-box">
+            <div style="font-weight: 700; margin-bottom: 3px; color: #ff9800;">NOTES:</div>
             <div>${order.notes}</div>
           </div>
           ` : ''}
 
           <div class="footer">
             <div class="thank-you">Thank You for Choosing Econuru!</div>
-            <div style="font-size: 13px; margin-bottom: 2px;">For inquiries: <span style="white-space: nowrap;">+254757883799</span></div>
-            <div style="font-size: 13px; margin-bottom: 16px; word-break: break-all;"><span style="font-weight: bold;">Email:</span> econuruservices@gmail.com</div>
-            <div style="margin-top: 0; font-size: 10px;">
-              This receipt serves as proof of order placement.<br>
-              Please keep it safe for order tracking.
+            <div class="contact-row">Phone: +254757883799 | Email: econuruservices@gmail.com</div>
+            <div class="mpesa-footer">
+              <div class="mpesa-footer-label">M-Pesa Till Number:</div>
+              <div class="till-number" style="font-size: 12px; margin-top: 2px;">7092156</div>
+            </div>
+            <div style="margin-top: 4px; font-size: 7px; color: #999;">
+              This receipt serves as proof of order placement. Please keep it safe for order tracking.
             </div>
           </div>
         </div>
