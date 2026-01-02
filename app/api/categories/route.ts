@@ -8,7 +8,11 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
     
-    const categories = await Category.find({}).sort({ createdAt: -1 });
+    // Optimize: Only select fields needed for POS
+    const categories = await Category.find({})
+      .select('name description icon color image active createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
     
     return NextResponse.json({
       success: true,

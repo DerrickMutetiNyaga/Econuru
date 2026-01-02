@@ -14,7 +14,11 @@ export async function GET(request: NextRequest) {
     console.log(`⚡ Services API: DB connected in ${connectTime}ms`);
     
     const queryStart = Date.now();
-    const services = await Service.find({}).sort({ createdAt: -1 }).lean();
+    // Optimize: Only select fields needed for POS
+    const services = await Service.find({})
+      .select('name description category price turnaround active featured image features createdAt updatedAt')
+      .sort({ createdAt: -1 })
+      .lean();
     const queryTime = Date.now() - queryStart;
     
     console.log(`✅ Services API: Found ${services.length} services in ${queryTime}ms (Total: ${Date.now() - startTime}ms)`);

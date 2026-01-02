@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -120,6 +120,94 @@ const iconMap: { [key: string]: React.ComponentType<any> } = {
   Building,
 };
 
+// Memoized Service Card Component for performance
+const ServiceCard = memo(({ service, categoryInfo, addToCart }: { 
+  service: Service; 
+  categoryInfo: any; 
+  addToCart: (service: Service, quantity: number) => void;
+}) => {
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+  
+  const handleAddToCart = useCallback(() => {
+    const input = quantityInputRef.current;
+    const quantity = input ? parseFloat(input.value) || 1 : 1;
+    addToCart(service, quantity);
+    if (input) input.value = "1";
+  }, [service, addToCart]);
+  
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const input = e.target as HTMLInputElement;
+      const quantity = parseFloat(input.value) || 1;
+      addToCart(service, quantity);
+      input.value = "1";
+    }
+  }, [service, addToCart]);
+  
+  return (
+    <div>
+      <Card className="h-full hover:shadow-lg transition-shadow duration-200 cursor-pointer group">
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            <div>
+              <h3 className="font-semibold text-gray-900 text-base mb-2 line-clamp-2">
+                {service.name}
+              </h3>
+              <div className="flex items-center gap-2 mb-3">
+                <Badge 
+                  variant="outline" 
+                  className="text-xs"
+                  style={{ borderColor: categoryInfo.color, color: categoryInfo.color }}
+                >
+                  {categoryInfo.name}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <div className="text-lg font-bold text-mint-green mb-1">
+                {service.price}
+              </div>
+              <div className="text-xs text-gray-500">
+                {service.category.includes('cleaning') ? 'per sqm' : 'per kg'}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label htmlFor={`quantity-${service._id}`} className="text-sm font-medium">
+                  Quantity:
+                </Label>
+                <Input
+                  ref={quantityInputRef}
+                  id={`quantity-${service._id}`}
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  placeholder="1.0"
+                  defaultValue="1"
+                  className="w-20 h-8 text-sm"
+                  onKeyDown={handleKeyDown}
+                />
+              </div>
+              <Button
+                onClick={handleAddToCart}
+                className="w-full bg-mint-green hover:bg-mint-green/90 text-white"
+                size="sm"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add to Cart
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+});
+
+ServiceCard.displayName = 'ServiceCard';
+
 export default function POSPage() {
   const { token } = useAuth();
   const router = useRouter();
@@ -127,6 +215,14 @@ export default function POSPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Cache for services and categories (5 minutes)
+  const [dataCache, setDataCache] = useState<{
+    services: Service[];
+    categories: Category[];
+    timestamp: number;
+  } | null>(null);
+  const CACHE_DURATION = 300000; // 5 minutes
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("main-branch");
@@ -323,23 +419,86 @@ export default function POSPage() {
     };
   }, []);
 
-  // Fetch services and categories
-  useEffect(() => {
-    if (token) {
-      fetchServices();
-      fetchCategories();
+  // Fetch services and categories - optimized with prefetching
+  const fetchData = useCallback(async (useCache: boolean = false) => {
+    // Check cache if useCache is true
+    if (useCache && dataCache && Date.now() - dataCache.timestamp < CACHE_DURATION) {
+      setServices(dataCache.services);
+      setCategories(dataCache.categories);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Fetch both services and categories in parallel
+      const [servicesResponse, categoriesResponse] = await Promise.all([
+        fetch('/api/services', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+        fetch('/api/categories', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+      ]);
+
+      const servicesData = await servicesResponse.json();
+      const categoriesData = await categoriesResponse.json();
+
+      if (servicesData.success && categoriesData.success) {
+        const fetchedServices = servicesData.services || [];
+        const fetchedCategories = categoriesData.categories || [];
+        
+        setServices(fetchedServices);
+        setCategories(fetchedCategories);
+        
+        // Update cache
+        setDataCache({
+          services: fetchedServices,
+          categories: fetchedCategories,
+          timestamp: Date.now(),
+        });
+      } else {
+        console.error('Error fetching data:', servicesData.error || categoriesData.error);
+      }
+    } catch (error) {
+      console.error('Error fetching services and categories:', error);
+    } finally {
+      setLoading(false);
     }
   }, [token]);
 
-  // Filter services based on search and category
   useEffect(() => {
+    if (token) {
+      fetchData(true); // Use cache if available
+      
+      // Prefetch data in background for instant subsequent loads
+      const prefetchTimer = setTimeout(() => {
+        // Prefetch after initial load completes
+        if (dataCache && Date.now() - dataCache.timestamp > CACHE_DURATION * 0.8) {
+          fetchData(false); // Refresh cache in background
+        }
+      }, 2000);
+      
+      return () => clearTimeout(prefetchTimer);
+    }
+  }, [token, fetchData, dataCache]);
+
+  // Optimized filtering with useMemo for performance
+  const filteredServicesMemo = useMemo(() => {
     let filtered = services.filter(service => service.active);
 
     if (searchQuery) {
+      const queryLower = searchQuery.toLowerCase();
       filtered = filtered.filter(service =>
-        service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        service.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        service.category.toLowerCase().includes(searchQuery.toLowerCase())
+        service.name.toLowerCase().includes(queryLower) ||
+        service.description.toLowerCase().includes(queryLower) ||
+        service.category.toLowerCase().includes(queryLower)
       );
     }
 
@@ -347,7 +506,8 @@ export default function POSPage() {
       filtered = filtered.filter(service => service.category === selectedCategory);
     }
 
-    filtered.sort((a, b) => {
+    // Sort services
+    const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case "name":
           return a.name.localeCompare(b.name);
@@ -362,48 +522,25 @@ export default function POSPage() {
       }
     });
 
-    setFilteredServices(filtered);
+    return sorted;
   }, [services, searchQuery, selectedCategory, sortBy]);
+  
+  // Update filteredServices when memoized value changes
+  useEffect(() => {
+    setFilteredServices(filteredServicesMemo);
+  }, [filteredServicesMemo]);
 
-  const fetchServices = async () => {
-    try {
-      const response = await fetch('/api/services', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        setServices(data.services);
-      }
-    } catch (error) {
-      console.error('Error fetching services:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // These functions are now replaced by fetchData, but keeping for backward compatibility
+  const fetchServices = useCallback(async () => {
+    await fetchData(false);
+  }, [fetchData]);
 
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch('/api/categories', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        setCategories(data.categories);
-      }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
-  };
+  const fetchCategories = useCallback(async () => {
+    await fetchData(false);
+  }, [fetchData]);
 
-  const getCategoryInfo = (categoryId: string) => {
+  // Memoize category info lookup for performance
+  const getCategoryInfo = useCallback((categoryId: string) => {
     const category = categories.find(cat => cat._id === categoryId);
     
     if (category) {
@@ -427,15 +564,15 @@ export default function POSPage() {
       icon: "Shirt",
       color: fallback.color
     };
-  };
+  }, [categories]);
 
   const getIconComponent = (iconName: string) => {
     const IconComponent = iconMap[iconName] || Shirt;
     return <IconComponent className="w-4 h-4" />;
   };
 
-  // Cart Functions
-  const addToCart = (service: Service, quantity: number) => {
+  // Cart Functions - Optimized with useCallback
+  const addToCart = useCallback((service: Service, quantity: number) => {
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.service._id === service._id);
       if (existingItem) {
@@ -447,13 +584,13 @@ export default function POSPage() {
       }
       return [...prevCart, { service, quantity, price: service.price }];
     });
-  };
+  }, []);
 
-  const removeFromCart = (serviceId: string) => {
+  const removeFromCart = useCallback((serviceId: string) => {
     setCart(prevCart => prevCart.filter(item => item.service._id !== serviceId));
-  };
+  }, []);
 
-  const updateQuantity = (serviceId: string, quantity: number) => {
+  const updateQuantity = useCallback((serviceId: string, quantity: number) => {
     if (quantity < 0.1) {
       removeFromCart(serviceId);
       return;
@@ -465,17 +602,18 @@ export default function POSPage() {
           : item
       )
     );
-  };
+  }, [removeFromCart]);
 
-  const getCartTotal = () => {
+  // Memoize cart calculations for performance
+  const cartTotal = useMemo(() => {
     return cart.reduce((total, item) => {
       const price = parseFloat(item.price.replace(/[^\d.]/g, ''));
       return total + (price * item.quantity);
     }, 0);
-  };
+  }, [cart]);
 
-  const calculateFinalTotal = () => {
-    let total = getCartTotal();
+  const finalTotal = useMemo(() => {
+    let total = cartTotal;
     
     // Add pick & drop amount if provided
     if (customerInfo.pickDropAmount && parseFloat(customerInfo.pickDropAmount) > 0) {
@@ -493,7 +631,11 @@ export default function POSPage() {
     }
     
     return Math.max(0, total); // Ensure total is not negative
-  };
+  }, [cartTotal, customerInfo.pickDropAmount, customerInfo.discount, promoDiscount]);
+  
+  // Keep old function names for backward compatibility
+  const getCartTotal = useCallback(() => cartTotal, [cartTotal]);
+  const calculateFinalTotal = useCallback(() => finalTotal, [finalTotal]);
 
   const clearCart = () => {
     setCart([]);
@@ -550,7 +692,7 @@ ${isNewOrder ? 'New Order Created!' : 'Order Updated!'}
 Order #${orderData.orderNumber || 'N/A'}
 
 Services: ${servicesList}
-Total Amount: Ksh ${calculateFinalTotal().toLocaleString()}
+Total Amount: Ksh ${finalTotal.toLocaleString()}
 
 Payment Status: ${customerInfo.paymentStatus.toUpperCase()}
 Laundry Status: ${customerInfo.laundryStatus.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
@@ -575,8 +717,8 @@ Order #${orderData.orderNumber || 'N/A'}
 Services:
 ${servicesList}
 
-Subtotal: Ksh ${getCartTotal().toLocaleString()}
-${customerInfo.pickDropAmount && parseFloat(customerInfo.pickDropAmount) > 0 ? `Pick & Drop: +Ksh ${parseFloat(customerInfo.pickDropAmount).toLocaleString()}\n` : ''}${customerInfo.discount && parseFloat(customerInfo.discount) > 0 ? `Discount: -Ksh ${parseFloat(customerInfo.discount).toLocaleString()}\n` : ''}${promoDiscount > 0 ? `Promo Discount: -Ksh ${promoDiscount.toLocaleString()}\n` : ''}Total: Ksh ${calculateFinalTotal().toLocaleString()}
+Subtotal: Ksh ${cartTotal.toLocaleString()}
+${customerInfo.pickDropAmount && parseFloat(customerInfo.pickDropAmount) > 0 ? `Pick & Drop: +Ksh ${parseFloat(customerInfo.pickDropAmount).toLocaleString()}\n` : ''}${customerInfo.discount && parseFloat(customerInfo.discount) > 0 ? `Discount: -Ksh ${parseFloat(customerInfo.discount).toLocaleString()}\n` : ''}${promoDiscount > 0 ? `Promo Discount: -Ksh ${promoDiscount.toLocaleString()}\n` : ''}Total: Ksh ${finalTotal.toLocaleString()}
 
 Payment Status: ${customerInfo.paymentStatus.toUpperCase()}
 Laundry Status: ${customerInfo.laundryStatus.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
@@ -637,7 +779,7 @@ Dear ${customerInfo.name},
 
 Thank you for your payment!
 
-Order Total: Ksh ${calculateFinalTotal().toLocaleString()}
+Order Total: Ksh ${finalTotal.toLocaleString()}
 Payment Status: PAID
 
 Your order has been successfully completed and delivered.
@@ -654,7 +796,7 @@ Dear ${customerInfo.name},
 
 Thank you for your payment!
 
-Order Total: Ksh ${calculateFinalTotal().toLocaleString()}
+Order Total: Ksh ${finalTotal.toLocaleString()}
 Payment Status: PAID
 
 Your order is now confirmed and will be processed.
@@ -676,7 +818,7 @@ Payment Status: UNPAID
 
 Please complete your payment to proceed with your order.
 
-Total Amount: Ksh ${calculateFinalTotal().toLocaleString()}
+Total Amount: Ksh ${finalTotal.toLocaleString()}
 
 Thank you for choosing Econuru Services!
 
@@ -692,7 +834,7 @@ Payment Status: PARTIAL PAYMENT
 
 Partial payment received. Please complete the remaining balance.
 
-Total Amount: Ksh ${calculateFinalTotal().toLocaleString()}
+Total Amount: Ksh ${finalTotal.toLocaleString()}
 
 Thank you for choosing Econuru Services!
 
@@ -773,7 +915,7 @@ Need help? Call us at +254 757 883 799`;
         pickupTime: customerInfo.pickupTime,
         notes: customerInfo.notes,
         location: selectedLocation,
-        totalAmount: calculateFinalTotal(),
+        totalAmount: finalTotal,
         pickDropAmount: customerInfo.pickDropAmount ? parseFloat(customerInfo.pickDropAmount) : 0,
         discount: customerInfo.discount ? parseFloat(customerInfo.discount) : 0,
         paymentStatus: customerInfo.paymentStatus,
@@ -988,7 +1130,7 @@ Need help? Call us at +254 757 883 799`;
       
       if (data.success && data.promotion) {
         // If validation succeeds, immediately lock it in
-        const orderAmount = getCartTotal();
+        const orderAmount = cartTotal;
         await lockInPromotion(code, orderAmount);
       } else {
         setPromoValid(false);
@@ -1020,16 +1162,17 @@ Need help? Call us at +254 757 883 799`;
     return () => clearTimeout(timeoutId);
   }, [promoCode, cart]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-mint-green" />
-          <p className="text-lg font-medium">Loading POS system...</p>
-        </div>
-      </div>
-    );
-  }
+  // Optimistic loading - show skeleton instead of blocking
+  // if (loading) {
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center">
+  //       <div className="text-center">
+  //         <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-mint-green" />
+  //         <p className="text-lg font-medium">Loading POS system...</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -1123,7 +1266,22 @@ Need help? Call us at +254 757 883 799`;
           </div>
 
           {/* Services Grid */}
-          {filteredServices.length === 0 ? (
+          {loading && filteredServices.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i} className="h-full animate-pulse">
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
+                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-6 bg-gray-200 rounded w-1/3"></div>
+                      <div className="h-8 bg-gray-200 rounded"></div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : filteredServices.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
                 <Search className="w-8 h-8 text-gray-400" />
@@ -1138,87 +1296,113 @@ Need help? Call us at +254 757 883 799`;
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredServices.map((service, index) => {
+              {filteredServices.map((service) => {
                 const categoryInfo = getCategoryInfo(service.category);
                 return (
-                  <motion.div
+                  <ServiceCard
                     key={service._id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Card className="h-full hover:shadow-lg transition-shadow duration-200 cursor-pointer group">
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          <div>
-                            <h3 className="font-semibold text-gray-900 text-base mb-2 line-clamp-2">
-                              {service.name}
-                            </h3>
-                            <div className="flex items-center gap-2 mb-3">
-                              <Badge 
-                                variant="outline" 
-                                className="text-xs"
-                                style={{ borderColor: categoryInfo.color, color: categoryInfo.color }}
-                              >
-                                {categoryInfo.name}
-                              </Badge>
-                            </div>
-                          </div>
-
-                          <div className="text-center">
-                            <div className="text-lg font-bold text-mint-green mb-1">
-                              {service.price}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {service.category.includes('cleaning') ? 'per sqm' : 'per kg'}
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor={`quantity-${service._id}`} className="text-sm font-medium">
-                                Quantity:
-                              </Label>
-                              <Input
-                                id={`quantity-${service._id}`}
-                                type="number"
-                                min="0.1"
-                                step="0.1"
-                                placeholder="1.0"
-                                defaultValue="1"
-                                className="w-20 h-8 text-sm"
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    const input = e.target as HTMLInputElement;
-                                    const quantity = parseFloat(input.value) || 1;
-                                    addToCart(service, quantity);
-                                    input.value = "1";
-                                  }
-                                }}
-                              />
-                            </div>
-                            <Button
-                              onClick={() => {
-                                const input = document.getElementById(`quantity-${service._id}`) as HTMLInputElement;
-                                const quantity = parseFloat(input.value) || 1;
-                                addToCart(service, quantity);
-                                input.value = "1";
-                              }}
-                              className="w-full bg-mint-green hover:bg-mint-green/90 text-white"
-                              size="sm"
-                            >
-                              <Plus className="w-4 h-4 mr-2" />
-                              Add to Cart
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
+                    service={service}
+                    categoryInfo={categoryInfo}
+                    addToCart={addToCart}
+                  />
                 );
               })}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Cart Sidebar */}
+      <div className="w-96 bg-white border-l shadow-lg flex flex-col">
+        <div className="p-6 border-b">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold">Order Cart</h2>
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-mint-green" />
+              <Badge variant="secondary">{cart.length} items</Badge>
+            </div>
+          </div>
+        </div>
+
+        {/* Cart Items */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {cart.length === 0 ? (
+            <div className="text-center py-12">
+              <ShoppingCart className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <p className="text-gray-500">Your cart is empty</p>
+            </div>
+          ) : (
+            cart.map((item) => (
+              <Card key={item.service._id} className="p-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-sm">{item.service.name}</h4>
+                    <p className="text-xs text-gray-500 mt-1">{item.price} × {item.quantity}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateQuantity(item.service._id, item.quantity - 0.1)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <span className="text-sm font-medium w-12 text-center">{item.quantity}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateQuantity(item.service._id, item.quantity + 0.1)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeFromCart(item.service._id)}
+                      className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+
+        {/* Cart Summary */}
+        <div className="border-t p-4 space-y-3 bg-gray-50">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Subtotal:</span>
+              <span className="font-medium">Ksh {cartTotal.toLocaleString()}</span>
+            </div>
+            {customerInfo.pickDropAmount && parseFloat(customerInfo.pickDropAmount) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Pick & Drop:</span>
+                <span className="font-medium">+Ksh {parseFloat(customerInfo.pickDropAmount).toLocaleString()}</span>
+              </div>
+            )}
+            {customerInfo.discount && parseFloat(customerInfo.discount) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Discount:</span>
+                <span className="font-medium text-green-600">-Ksh {parseFloat(customerInfo.discount).toLocaleString()}</span>
+              </div>
+            )}
+            {promoDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Promo Discount:</span>
+                <span className="font-medium text-green-600">-Ksh {promoDiscount.toLocaleString()}</span>
+              </div>
+            )}
+            <Separator />
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total:</span>
+              <span className="text-mint-green">Ksh {finalTotal.toLocaleString()}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1713,7 +1897,7 @@ Need help? Call us at +254 757 883 799`;
               <div className="flex justify-between items-center pt-3 border-t border-gray-200">
                 <span className="font-bold text-lg text-gray-900">Total:</span>
                 <span className="text-2xl font-bold text-mint-green">
-                  Ksh {calculateFinalTotal().toLocaleString()}
+                  Ksh {finalTotal.toLocaleString()}
                 </span>
               </div>
 
