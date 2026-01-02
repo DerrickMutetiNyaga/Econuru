@@ -16,13 +16,15 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
-  Shield
+  Shield,
+  Trash2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAuth } from "@/hooks/useAuth"
 import UserPermissionsModal from '@/components/UserPermissionsModal'
 import ProtectedRoute from '@/components/ProtectedRoute'
@@ -48,7 +50,7 @@ interface Pagination {
 }
 
 export default function UserManagement() {
-  const { token } = useAuth();
+  const { token, isSuperAdmin } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -65,6 +67,9 @@ export default function UserManagement() {
   });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch users from API
   const fetchUsers = async (page = 1, search = "", role = "all", status = "all") => {
@@ -310,6 +315,62 @@ export default function UserManagement() {
     }
   };
 
+  const handleDeleteClick = (user: User) => {
+    setUserToDelete(user);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!userToDelete || !token) return;
+
+    try {
+      setIsDeleting(true);
+      const response = await fetch(`/api/users/${userToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Remove user from list
+        setUsers(prev => prev.filter(user => user.id !== userToDelete.id));
+        setMessage(`User "${userToDelete.name}" deleted successfully`);
+        setTimeout(() => setMessage(""), 3000);
+        setDeleteDialogOpen(false);
+        setUserToDelete(null);
+        
+        // Refresh pagination if needed
+        if (users.length === 1 && pagination.currentPage > 1) {
+          fetchUsers(pagination.currentPage - 1, searchTerm, filterRole, filterStatus);
+        } else {
+          fetchUsers(pagination.currentPage, searchTerm, filterRole, filterStatus);
+        }
+      } else {
+        setError(data.error || 'Failed to delete user');
+        setTimeout(() => setError(""), 3000);
+        setDeleteDialogOpen(false);
+        setUserToDelete(null);
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      setError('Failed to delete user');
+      setTimeout(() => setError(""), 3000);
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setUserToDelete(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -511,6 +572,17 @@ export default function UserManagement() {
                         <Shield className="h-4 w-4 mr-1" />
                         Permissions
                       </Button>
+                      {isSuperAdmin && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteClick(user)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
+                        </Button>
+                      )}
                   </div>
                 </motion.div>
               ))}
@@ -554,6 +626,45 @@ export default function UserManagement() {
           onClose={handleClosePermissions}
           onSave={handleSavePermissions}
         />
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete User</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete <strong>{userToDelete?.name}</strong> ({userToDelete?.email})? 
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={handleDeleteCancel}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete User
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </ProtectedRoute>
   )

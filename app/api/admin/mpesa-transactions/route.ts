@@ -21,34 +21,121 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get('filter') || 'all'; // all, unconnected, connected
+    const month = searchParams.get('month'); // Format: YYYY-MM
+    const year = searchParams.get('year'); // Format: YYYY
 
-    let query = {};
+    let query: any = {};
     if (filter === 'unconnected') {
-      query = { isConnectedToOrder: false };
+      query.isConnectedToOrder = false;
     } else if (filter === 'connected') {
-      query = { isConnectedToOrder: true };
+      query.isConnectedToOrder = true;
+    }
+    
+    // Add month/year filtering
+    if (month && year) {
+      // Parse month and year
+      const monthNum = parseInt(month);
+      const yearNum = parseInt(year);
+      
+      if (isNaN(monthNum) || isNaN(yearNum)) {
+        return NextResponse.json(
+          { error: 'Invalid month or year parameter' },
+          { status: 400 }
+        );
+      }
+      
+      // Create date range for the month
+      // Start: First day of the month at 00:00:00 local time
+      const startDate = new Date(yearNum, monthNum - 1, 1, 0, 0, 0, 0);
+      // End: First day of next month at 00:00:00 (exclusive), so we use $lt
+      const endDate = new Date(yearNum, monthNum, 1, 0, 0, 0, 0);
+      
+      console.log(`📅 Filtering transactions for ${monthNum}/${yearNum}:`, {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
+      
+      query.transactionDate = {
+        $gte: startDate,
+        $lt: endDate  // Use $lt (less than) instead of $lte to exclude next month
+      };
+    } else if (year) {
+      // Filter by year only
+      const yearNum = parseInt(year);
+      
+      if (isNaN(yearNum)) {
+        return NextResponse.json(
+          { error: 'Invalid year parameter' },
+          { status: 400 }
+        );
+      }
+      
+      const startDate = new Date(yearNum, 0, 1, 0, 0, 0, 0); // January 1st
+      const endDate = new Date(yearNum + 1, 0, 1, 0, 0, 0, 0); // January 1st of next year (exclusive)
+      
+      query.transactionDate = {
+        $gte: startDate,
+        $lt: endDate
+      };
     }
     // Note: We're showing ALL transactions regardless of STK success status
 
-    // Fetch M-Pesa transactions
+    // Fetch M-Pesa transactions - optimized with select to reduce data transfer
     const transactions = await MpesaTransaction.find(query)
-      .populate('connectedOrderId', 'orderNumber customer paymentStatus')
+      .select('transactionId mpesaReceiptNumber transactionDate phoneNumber amountPaid transactionType customerName isConnectedToOrder connectedOrderId notes createdAt')
+      .populate('connectedOrderId', 'orderNumber customer.name customer.phone paymentStatus')
       .sort({ transactionDate: -1 })
       .lean();
+    
+    console.log(`✅ Found ${transactions.length} transactions matching the query`);
 
-    // Get statistics
-    const stats = {
-      total: await MpesaTransaction.countDocuments(),
-      unconnected: await MpesaTransaction.countDocuments({ isConnectedToOrder: false }),
-      connected: await MpesaTransaction.countDocuments({ isConnectedToOrder: true }),
-      totalAmount: await MpesaTransaction.aggregate([
+    // Get statistics (for current filter) - run in parallel for speed
+    const [totalCount, unconnectedCount, connectedCount, totalAmountResult, unconnectedAmountResult] = await Promise.all([
+      MpesaTransaction.countDocuments(query),
+      MpesaTransaction.countDocuments({ ...query, isConnectedToOrder: false }),
+      MpesaTransaction.countDocuments({ ...query, isConnectedToOrder: true }),
+      MpesaTransaction.aggregate([
+        { $match: query },
         { $group: { _id: null, total: { $sum: '$amountPaid' } } }
       ]).then(result => result[0]?.total || 0),
-      unconnectedAmount: await MpesaTransaction.aggregate([
-        { $match: { isConnectedToOrder: false } },
+      MpesaTransaction.aggregate([
+        { $match: { ...query, isConnectedToOrder: false } },
         { $group: { _id: null, total: { $sum: '$amountPaid' } } }
       ]).then(result => result[0]?.total || 0)
+    ]);
+    
+    const stats = {
+      total: totalCount,
+      unconnected: unconnectedCount,
+      connected: connectedCount,
+      totalAmount: totalAmountResult,
+      unconnectedAmount: unconnectedAmountResult
     };
+
+    // Get monthly summary for all months (for navigation) - only if superadmin
+    // This is expensive, so we'll make it optional or cache it
+    let monthlySummary: any[] = [];
+    try {
+      const monthlySummaryResult = await MpesaTransaction.aggregate([
+        {
+          $group: {
+            _id: {
+              year: { $year: '$transactionDate' },
+              month: { $month: '$transactionDate' }
+            },
+            totalAmount: { $sum: '$amountPaid' },
+            transactionCount: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { '_id.year': -1, '_id.month': -1 }
+        }
+      ]);
+      monthlySummary = monthlySummaryResult || [];
+    } catch (error) {
+      console.warn('Error fetching monthly summary:', error);
+      monthlySummary = [];
+    }
 
     // Also fetch recent pending orders for connection suggestions
     const pendingOrders = await Order.find({
@@ -63,7 +150,8 @@ export async function GET(request: NextRequest) {
       success: true,
       transactions,
       stats,
-      pendingOrders
+      pendingOrders,
+      monthlySummary
     });
 
   } catch (error: any) {

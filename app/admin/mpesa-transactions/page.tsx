@@ -18,7 +18,9 @@ import {
   AlertTriangle,
   Plus,
   Edit,
-  Calculator
+  Calculator,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
@@ -63,7 +65,7 @@ interface Order {
 }
 
 export default function MpesaTransactionsPage() {
-  const { isAdmin, logout, isLoading, token } = useAuth();
+  const { isAdmin, isSuperAdmin, logout, isLoading, token } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   
@@ -72,6 +74,16 @@ export default function MpesaTransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Month/Year filtering
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [monthlySummary, setMonthlySummary] = useState<any[]>([]);
+  
+  // Cache for transactions to speed up loading
+  const [transactionsCache, setTransactionsCache] = useState<Map<string, MpesaTransaction[]>>(new Map());
+  const [cacheTimestamp, setCacheTimestamp] = useState<Map<string, number>>(new Map());
+  const CACHE_DURATION = 30000; // 30 seconds cache
   
   // Connection modal state
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
@@ -106,66 +118,183 @@ export default function MpesaTransactionsPage() {
 
   useEffect(() => {
     if (token) {
-      loadData();
-    }
-  }, [token]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
+      // Check cache first
+      const cacheKey = `${selectedYear}-${selectedMonth}`;
+      const cached = transactionsCache.get(cacheKey);
+      const timestamp = cacheTimestamp.get(cacheKey);
+      const now = Date.now();
       
-      // Load M-Pesa transactions
-      const transactionsResponse = await fetch('/api/admin/mpesa-transactions', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      // Load orders for connection dropdown and display
-      const ordersResponse = await fetch('/api/orders', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (transactionsResponse.ok && ordersResponse.ok) {
-        const transactionsData = await transactionsResponse.json();
-        const ordersData = await ordersResponse.json();
-        
-        // Debug: Log transaction data to see phone number format
-        if (transactionsData.transactions && transactionsData.transactions.length > 0) {
-          console.log('🔍 DEBUG: First transaction data:', {
-            phoneNumber: transactionsData.transactions[0].phoneNumber,
-            transactionId: transactionsData.transactions[0].transactionId,
-            customerName: transactionsData.transactions[0].customerName,
-            isConnectedToOrder: transactionsData.transactions[0].isConnectedToOrder,
-            connectedOrderId: transactionsData.transactions[0].connectedOrderId
-          });
-        }
-        
-        // Debug: Log orders data
-        if (ordersData.orders && ordersData.orders.length > 0) {
-          console.log('🔍 DEBUG: Orders loaded:', {
-            totalOrders: ordersData.orders.length,
-            firstOrder: {
-              _id: ordersData.orders[0]._id,
-              orderNumber: ordersData.orders[0].orderNumber,
-              customer: ordersData.orders[0].customer?.name,
-              paymentStatus: ordersData.orders[0].paymentStatus
-            },
-            allOrderIds: ordersData.orders.map(o => ({ id: o._id, orderNumber: o.orderNumber })).slice(0, 5)
-          });
-        }
-        
-        setTransactions(transactionsData.transactions || []);
-        setOrders(ordersData.orders || []);
+      if (cached && timestamp && (now - timestamp) < CACHE_DURATION) {
+        // Use cached data immediately
+        console.log('⚡ Using cached transactions for', cacheKey);
+        setTransactions(cached);
+        setLoading(false);
+        // Still refresh in background
+        loadData();
       } else {
+        // No cache or expired, load fresh
+        loadData();
+      }
+    }
+  }, [token, selectedMonth, selectedYear]);
+
+  const loadData = async (skipLoadingState = false) => {
+    try {
+      if (!skipLoadingState) {
+        setLoading(true);
+      }
+      
+      // Build query params for month/year filtering
+      const params = new URLSearchParams();
+      params.append('month', selectedMonth.toString());
+      params.append('year', selectedYear.toString());
+      
+      // Use Promise.all for parallel requests with AbortController for cancellation
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      // Load M-Pesa transactions and orders in parallel
+      const [transactionsResponse, ordersResponse] = await Promise.all([
+        fetch(`/api/admin/mpesa-transactions?${params.toString()}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          signal: controller.signal,
+          cache: 'no-store', // Always fetch fresh data
+        }),
+        fetch('/api/orders', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        })
+      ]);
+      
+      clearTimeout(timeoutId);
+      
+      // Check if transactions response is ok
+      if (!transactionsResponse.ok) {
+        let errorMessage = 'Failed to load transactions';
+        try {
+          const errorText = await transactionsResponse.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            errorMessage = errorText || `HTTP ${transactionsResponse.status}`;
+          }
+        } catch (e) {
+          errorMessage = `HTTP ${transactionsResponse.status}: ${transactionsResponse.statusText || 'Unknown error'}`;
+        }
+        
+        // Use console.warn instead of console.error to avoid Next.js error handling
+        console.warn('Transactions API Error - Status:', transactionsResponse.status);
+        console.warn('Transactions API Error - Message:', errorMessage);
+        
+        // Still try to load orders even if transactions fail
+        if (ordersResponse.ok) {
+          try {
+            const ordersData = await ordersResponse.json();
+            setOrders(ordersData.orders || []);
+          } catch (e) {
+            // Ignore orders parsing error
+          }
+        }
+        
         toast({
-          title: 'Error Loading Data',
-          description: 'Failed to load transactions or orders',
+          title: 'Error Loading Transactions',
+          description: errorMessage,
           variant: 'destructive',
         });
+        
+        setLoading(false);
+        return;
       }
+      
+      // Parse successful responses
+      let transactionsData;
+      let ordersData = { orders: [] };
+      
+      try {
+        transactionsData = await transactionsResponse.json();
+        console.log('📊 Transactions API Response:', {
+          success: transactionsData.success,
+          transactionCount: transactionsData.transactions?.length || 0,
+          hasTransactions: !!transactionsData.transactions,
+          selectedMonth,
+          selectedYear
+        });
+      } catch (parseError) {
+        console.error('❌ Error parsing transactions response:', parseError);
+        toast({
+          title: 'Error Parsing Response',
+          description: 'Failed to parse transactions data',
+          variant: 'destructive',
+        });
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        if (ordersResponse.ok) {
+          ordersData = await ordersResponse.json();
+        }
+      } catch (parseError) {
+        console.warn('⚠️ Error parsing orders response:', parseError);
+      }
+      
+      // Debug: Log transaction data to see phone number format
+      if (transactionsData.transactions && transactionsData.transactions.length > 0) {
+        console.log('🔍 DEBUG: First transaction data:', {
+          phoneNumber: transactionsData.transactions[0].phoneNumber,
+          transactionId: transactionsData.transactions[0].transactionId,
+          customerName: transactionsData.transactions[0].customerName,
+          transactionDate: transactionsData.transactions[0].transactionDate,
+          isConnectedToOrder: transactionsData.transactions[0].isConnectedToOrder,
+          connectedOrderId: transactionsData.transactions[0].connectedOrderId
+        });
+      } else {
+        console.warn('⚠️ No transactions found for', selectedMonth, selectedYear);
+        console.warn('⚠️ Response data:', transactionsData);
+      }
+      
+      // Debug: Log orders data
+      if (ordersData.orders && ordersData.orders.length > 0) {
+        console.log('🔍 DEBUG: Orders loaded:', {
+          totalOrders: ordersData.orders.length,
+          firstOrder: {
+            _id: ordersData.orders[0]._id,
+            orderNumber: ordersData.orders[0].orderNumber,
+            customer: ordersData.orders[0].customer?.name,
+            paymentStatus: ordersData.orders[0].paymentStatus
+          },
+          allOrderIds: ordersData.orders.map(o => ({ id: o._id, orderNumber: o.orderNumber })).slice(0, 5)
+        });
+      }
+      
+      // Set transactions - ensure we handle both array and undefined cases
+      const transactionsArray = Array.isArray(transactionsData.transactions) 
+        ? transactionsData.transactions 
+        : [];
+      
+      console.log('✅ Setting transactions:', transactionsArray.length);
+      
+      // Cache the transactions
+      const cacheKey = `${selectedYear}-${selectedMonth}`;
+      setTransactionsCache(prev => {
+        const newCache = new Map(prev);
+        newCache.set(cacheKey, transactionsArray);
+        return newCache;
+      });
+      setCacheTimestamp(prev => {
+        const newTimestamp = new Map(prev);
+        newTimestamp.set(cacheKey, Date.now());
+        return newTimestamp;
+      });
+      
+      setTransactions(transactionsArray);
+      setOrders(ordersData.orders || []);
+      setMonthlySummary(transactionsData.monthlySummary || []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast({
@@ -534,6 +663,275 @@ export default function MpesaTransactionsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Month/Year Selector */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-gray-600" />
+                <span className="text-sm font-medium text-gray-700">View Transactions for:</span>
+              </div>
+              <div className="px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                <span className="text-sm font-semibold text-blue-700">
+                  {new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </span>
+              </div>
+              {!isSuperAdmin && (
+                <span className="text-xs text-gray-500 mt-1 sm:mt-0">
+                  (Use controls below to view other months/years)
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {/* Previous Month Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedMonth === 1) {
+                    setSelectedMonth(12);
+                    setSelectedYear(selectedYear - 1);
+                  } else {
+                    setSelectedMonth(selectedMonth - 1);
+                  }
+                }}
+                className="gap-2"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </Button>
+
+              {/* Month Selector */}
+              <Select
+                value={selectedMonth.toString()}
+                onValueChange={(value) => setSelectedMonth(parseInt(value))}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">January</SelectItem>
+                  <SelectItem value="2">February</SelectItem>
+                  <SelectItem value="3">March</SelectItem>
+                  <SelectItem value="4">April</SelectItem>
+                  <SelectItem value="5">May</SelectItem>
+                  <SelectItem value="6">June</SelectItem>
+                  <SelectItem value="7">July</SelectItem>
+                  <SelectItem value="8">August</SelectItem>
+                  <SelectItem value="9">September</SelectItem>
+                  <SelectItem value="10">October</SelectItem>
+                  <SelectItem value="11">November</SelectItem>
+                  <SelectItem value="12">December</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Year Selector */}
+              <Select
+                value={selectedYear.toString()}
+                onValueChange={(value) => setSelectedYear(parseInt(value))}
+              >
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 10 }, (_, i) => {
+                    const year = new Date().getFullYear() - i;
+                    return (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+
+              {/* Next Month Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedMonth === 12) {
+                    setSelectedMonth(1);
+                    setSelectedYear(selectedYear + 1);
+                  } else {
+                    setSelectedMonth(selectedMonth + 1);
+                  }
+                }}
+                disabled={selectedYear === new Date().getFullYear() && selectedMonth === new Date().getMonth() + 1}
+                className="gap-2"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+
+              {/* Current Month Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedMonth(new Date().getMonth() + 1);
+                  setSelectedYear(new Date().getFullYear());
+                }}
+                className="gap-2"
+              >
+                Current Month
+              </Button>
+            </div>
+          </div>
+
+          {/* Monthly Summary - Only show months for selected year - SUPER ADMIN ONLY */}
+          {isSuperAdmin && monthlySummary && monthlySummary.length > 0 && (() => {
+            // Filter to show only months from the selected year
+            const currentYearMonths = monthlySummary.filter(month => month._id.year === selectedYear);
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            // If no months for selected year, show message
+            if (currentYearMonths.length === 0) {
+              return (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No transactions found for {selectedYear}
+                  </p>
+                </div>
+              );
+            }
+            
+            return (
+              <div className="mt-4 pt-4 border-t">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700">
+                    {selectedYear === new Date().getFullYear() ? 'This Year' : selectedYear} Summary
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Click on any month to view its transactions
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {currentYearMonths.map((month, index) => {
+                    const isSelected = month._id.year === selectedYear && month._id.month === selectedMonth;
+                    const isCurrentMonth = month._id.year === new Date().getFullYear() && 
+                                         month._id.month === new Date().getMonth() + 1;
+                    return (
+                      <button
+                        key={`${month._id.year}-${month._id.month}`}
+                        onClick={() => {
+                          setSelectedYear(month._id.year);
+                          setSelectedMonth(month._id.month);
+                        }}
+                        className={`relative px-4 py-3 rounded-xl border-2 text-left transition-all duration-200 transform hover:scale-105 hover:shadow-md ${
+                          isSelected
+                            ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white border-blue-600 shadow-lg scale-105'
+                            : isCurrentMonth
+                            ? 'bg-gradient-to-br from-green-50 to-blue-50 text-gray-800 border-green-300 hover:border-green-400'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {/* Current Month Badge */}
+                        {isCurrentMonth && !isSelected && (
+                          <div className="absolute top-2 right-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          </div>
+                        )}
+                        
+                        <div className={`font-bold text-base mb-1 ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                          {monthNames[month._id.month - 1]}
+                        </div>
+                        
+                        <div className={`text-xs mb-2 ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
+                          {month.transactionCount} {month.transactionCount === 1 ? 'transaction' : 'transactions'}
+                        </div>
+                        
+                        <div className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-green-600'}`}>
+                          KES {month.totalAmount.toLocaleString()}
+                        </div>
+                        
+                        {/* Selected indicator */}
+                        {isSelected && (
+                          <div className="absolute bottom-2 right-2">
+                            <CheckCircle className="w-4 h-4 text-white" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Show other years if available */}
+                {selectedYear !== new Date().getFullYear() && monthlySummary.filter(m => m._id.year !== selectedYear).length > 0 && (
+                  <div className="mt-6 pt-4 border-t">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Other Years</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(new Set(monthlySummary.map(m => m._id.year)))
+                        .filter(year => year !== selectedYear)
+                        .sort((a, b) => b - a)
+                        .map(year => {
+                          const yearTotal = monthlySummary
+                            .filter(m => m._id.year === year)
+                            .reduce((sum, m) => sum + m.totalAmount, 0);
+                          const yearCount = monthlySummary
+                            .filter(m => m._id.year === year)
+                            .reduce((sum, m) => sum + m.transactionCount, 0);
+                          
+                          return (
+                            <button
+                              key={year}
+                              onClick={() => {
+                                setSelectedYear(year);
+                                // Set to first month of that year that has transactions
+                                const firstMonth = monthlySummary
+                                  .filter(m => m._id.year === year)
+                                  .sort((a, b) => b._id.month - a._id.month)[0];
+                                if (firstMonth) {
+                                  setSelectedMonth(firstMonth._id.month);
+                                }
+                              }}
+                              className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors text-sm"
+                            >
+                              <div className="font-semibold">{year}</div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {yearCount} transactions
+                              </div>
+                              <div className="text-xs font-semibold text-green-600 mt-1">
+                                KES {yearTotal.toLocaleString()}
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
+      {/* Monthly Total Card */}
+      <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-gray-600 mb-1">
+                Total for {new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </div>
+              <div className="text-sm text-gray-500 mt-1">
+                {transactions.length} transaction{transactions.length !== 1 ? 's' : ''} {selectedYear === new Date().getFullYear() && selectedMonth === new Date().getMonth() + 1 ? 'this month' : `in ${new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}
+              </div>
+              {!isSuperAdmin && (
+                <div className="mt-2 text-xs text-gray-500">
+                  💡 Tip: Use the month/year selector above to view transactions from other periods
+                </div>
+              )}
+            </div>
+            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+              <DollarSign className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
