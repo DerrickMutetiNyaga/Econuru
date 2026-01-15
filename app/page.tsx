@@ -778,75 +778,95 @@ export default function Home() {
             {/* Dynamic Hero/Banner Section */}
       <motion.section
         ref={heroRef}
-        className="relative pt-24 pb-20 overflow-hidden"
+        className="relative pt-16 sm:pt-20 md:pt-24 pb-12 sm:pb-16 md:pb-20 overflow-hidden"
         initial={{ opacity: 0 }}
         animate={heroInView ? { opacity: 1 } : {}}
         transition={{ duration: 0.8 }}
       >
-                      <div className="container px-4 md:px-6">
+                      <div className="container px-4 sm:px-6 md:px-8">
                 {banners.length > 0 ? (
             <div className="relative">
-              <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 items-center">
+              <div className="grid gap-6 md:gap-8 lg:grid-cols-2 lg:gap-12 items-center">
                 {/* Banner Content */}
                 <motion.div
-                  className="flex flex-col gap-4"
+                  className="flex flex-col gap-4 sm:gap-5 md:gap-6 relative order-2 lg:order-1"
                   initial={{ opacity: 0, y: 20 }}
                   animate={heroInView ? { opacity: 1, y: 0 } : {}}
                   transition={{ duration: 0.8, delay: 0.2 }}
                 >
-                  <h1 className="text-4xl md:text-5xl lg:text-6xl font-playfair font-bold tracking-tight">
-                    {banners[currentBanner].title}
-                  </h1>
-                  <p className="text-lg text-text-light max-w-[600px]">
-                    {banners[currentBanner].description}
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-4 mt-4">
-                    {banners[currentBanner].button1 && banners[currentBanner].button1.text && (
-                      <Link href={banners[currentBanner].button1.link}>
-                        <Button size="lg" className="bg-accent hover:bg-accent/90 text-white rounded-xl px-8">
-                          {banners[currentBanner].button1.text}
-                        </Button>
-                      </Link>
-                    )}
-                    {banners[currentBanner].button2 && banners[currentBanner].button2.text && (
-                      <Link href={banners[currentBanner].button2.link}>
-                        <Button
-                          size="lg"
-                          variant="outline"
-                          className="border-primary text-primary hover:bg-primary/5 rounded-xl px-8"
-                        >
-                          {banners[currentBanner].button2.text}
-                        </Button>
-                      </Link>
+                  {/* Decorative gradient background - hidden on mobile */}
+                  <div className="hidden md:block absolute -top-10 -left-10 w-40 h-40 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full blur-3xl opacity-50" />
+                  
+                  <div className="relative z-10">
+                    {/* Title with gradient text */}
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-playfair font-bold tracking-tight mb-3 sm:mb-4">
+                      <span className="bg-gradient-to-r from-primary via-primary to-accent bg-clip-text text-transparent">
+                        {banners[currentBanner].title}
+                      </span>
+                    </h1>
+                    
+                    {/* Description with better styling */}
+                    <p className="text-base sm:text-lg md:text-xl text-gray-700 max-w-[600px] leading-relaxed mb-4 sm:mb-5 md:mb-6">
+                      {banners[currentBanner].description}
+                    </p>
+                    
+                    {/* Buttons with enhanced styling - full width on mobile */}
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-5 md:mb-6">
+                      {banners[currentBanner].button1 && banners[currentBanner].button1.text && (
+                        <Link href={banners[currentBanner].button1.link} className="w-full sm:w-auto">
+                          <Button 
+                            size="lg" 
+                            className="w-full sm:w-auto bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent text-white rounded-xl px-6 sm:px-8 py-5 sm:py-6 text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                          >
+                            {banners[currentBanner].button1.text}
+                          </Button>
+                        </Link>
+                      )}
+                      {banners[currentBanner].button2 && banners[currentBanner].button2.text && (
+                        <Link href={banners[currentBanner].button2.link} className="w-full sm:w-auto">
+                          <Button
+                            size="lg"
+                            variant="outline"
+                            className="w-full sm:w-auto border-2 border-primary text-primary hover:bg-gradient-to-r hover:from-primary/10 hover:to-accent/10 rounded-xl px-6 sm:px-8 py-5 sm:py-6 text-sm sm:text-base font-semibold transition-all duration-300 hover:scale-105"
+                          >
+                            {banners[currentBanner].button2.text}
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
+                    
+                    {/* Review Snippet with enhanced styling */}
+                    {banners[currentBanner].reviewSnippet && (
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gradient-to-r from-primary/10 via-accent/5 to-primary/10 rounded-xl border border-primary/20">
+                        <div className="flex -space-x-2 shrink-0">
+                          {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-white overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shadow-md">
+                              <User className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="text-xs sm:text-sm md:text-base flex-1">
+                          <span className="font-bold text-primary text-base sm:text-lg">{banners[currentBanner].reviewSnippet.rating}</span>
+                          <span className="text-gray-600">/5</span>
+                          <span className="text-gray-600 ml-1 sm:ml-2">from over</span>
+                          <span className="font-bold text-accent ml-1">{banners[currentBanner].reviewSnippet.reviewCount.toLocaleString()}+</span>
+                          <span className="text-gray-600 ml-1">reviews</span>
+                          {banners[currentBanner].reviewSnippet.text && (
+                            <span className="text-gray-500 italic block mt-1 text-xs sm:text-sm">{banners[currentBanner].reviewSnippet.text}</span>
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
-                  {/* Review Snippet */}
-                  {banners[currentBanner].reviewSnippet && (
-                    <div className="flex items-center gap-4 mt-6">
-                      <div className="flex -space-x-2">
-                        {[1, 2, 3, 4].map((i) => (
-                          <div key={i} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-gray-200 flex items-center justify-center">
-                            <User className="w-5 h-5 text-gray-400" />
-                          </div>
-                        ))}
-                      </div>
-                      <div className="text-sm">
-                        <span className="font-semibold">{banners[currentBanner].reviewSnippet.rating}/5</span> from over <span className="font-semibold">{banners[currentBanner].reviewSnippet.reviewCount.toLocaleString()}</span> reviews
-                        {banners[currentBanner].reviewSnippet.text && (
-                          <span className="ml-2 italic">{banners[currentBanner].reviewSnippet.text}</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </motion.div>
                 {/* Banner Image with floating badges */}
                 <motion.div
-                  className="relative"
+                  className="relative order-1 lg:order-2"
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={heroInView ? { opacity: 1, scale: 1 } : {}}
                   transition={{ duration: 0.8, delay: 0.4 }}
                 >
-                  <div className="relative h-[400px] md:h-[500px] w-full rounded-2xl overflow-hidden luxury-shadow">
+                  <div className="relative h-[280px] sm:h-[350px] md:h-[400px] lg:h-[500px] w-full rounded-xl sm:rounded-2xl overflow-hidden luxury-shadow">
                     {banners[currentBanner].bannerImage ? (
                       <img
                         src={banners[currentBanner].bannerImage}
@@ -855,25 +875,25 @@ export default function Home() {
                       />
                     ) : (
                       <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                        <ImageIcon className="h-16 w-16 text-gray-400" />
+                        <ImageIcon className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400" />
                       </div>
                     )}
-                    {/* Floating badges on image */}
+                    {/* Floating badges on image - smaller and repositioned on mobile */}
                     {banners[currentBanner].badges && banners[currentBanner].badges.length > 0 && (
                       <>
                         {banners[currentBanner].badges[0] && (
-                          <div className="absolute top-6 right-6 bg-white p-4 rounded-xl luxury-shadow flex items-center gap-2">
-                            {BADGE_ICON_MAP[banners[currentBanner].badges[0].icon] || <ImageIcon className="w-5 h-5" />}
+                          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 md:top-6 md:right-6 bg-white p-2 sm:p-3 md:p-4 rounded-lg sm:rounded-xl luxury-shadow flex items-center gap-1.5 sm:gap-2">
+                            {BADGE_ICON_MAP[banners[currentBanner].badges[0].icon] || <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
                             <div>
-                              <p className="text-sm font-medium">{banners[currentBanner].badges[0].title}</p>
+                              <p className="text-xs sm:text-sm font-medium">{banners[currentBanner].badges[0].title}</p>
                             </div>
                           </div>
                         )}
                         {banners[currentBanner].badges[1] && (
-                          <div className="absolute bottom-6 left-6 bg-white p-4 rounded-xl luxury-shadow flex items-center gap-2">
-                            {BADGE_ICON_MAP[banners[currentBanner].badges[1].icon] || <ImageIcon className="w-5 h-5" />}
+                          <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 md:bottom-6 md:left-6 bg-white p-2 sm:p-3 md:p-4 rounded-lg sm:rounded-xl luxury-shadow flex items-center gap-1.5 sm:gap-2">
+                            {BADGE_ICON_MAP[banners[currentBanner].badges[1].icon] || <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
                             <div>
-                              <p className="text-sm font-medium">{banners[currentBanner].badges[1].title}</p>
+                              <p className="text-xs sm:text-sm font-medium">{banners[currentBanner].badges[1].title}</p>
                             </div>
                           </div>
                         )}
@@ -884,11 +904,11 @@ export default function Home() {
               </div>
               {/* Banner Slider Controls */}
               {banners.length > 1 && (
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-0 flex gap-2 mt-6">
+                <div className="flex justify-center gap-2 mt-4 sm:mt-6">
                   {banners.map((_, idx) => (
                     <button
                       key={idx}
-                      className={`w-3 h-3 rounded-full border-2 ${currentBanner === idx ? 'bg-primary border-primary' : 'bg-white border-gray-300'}`}
+                      className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full border-2 transition-all ${currentBanner === idx ? 'bg-primary border-primary' : 'bg-white border-gray-300'}`}
                       onClick={() => setCurrentBanner(idx)}
                       aria-label={`Go to banner ${idx + 1}`}
                     />
@@ -903,27 +923,27 @@ export default function Home() {
             </div>
           )}
         </div>
-        {/* Decorative elements */}
-        <div className="absolute top-1/4 left-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -z-10"></div>
-        <div className="absolute bottom-1/4 right-0 w-80 h-80 bg-accent/5 rounded-full blur-3xl -z-10"></div>
+        {/* Decorative elements - hidden on mobile */}
+        <div className="hidden md:block absolute top-1/4 left-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -z-10"></div>
+        <div className="hidden md:block absolute bottom-1/4 right-0 w-80 h-80 bg-accent/5 rounded-full blur-3xl -z-10"></div>
       </motion.section>
 
       {/* Services Section */}
-      <section ref={servicesRef} className="py-12 bg-gradient-to-br from-primary/5 via-accent/3 to-primary/8">
-        <div className="container px-4 md:px-6">
+      <section ref={servicesRef} className="py-8 sm:py-10 md:py-12 bg-gradient-to-br from-primary/5 via-accent/3 to-primary/8">
+        <div className="container px-4 sm:px-6 md:px-8">
           <motion.div
-            className="text-center mb-12"
+            className="text-center mb-8 sm:mb-10 md:mb-12"
             initial={{ opacity: 0, y: 20 }}
             animate={servicesInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Our Services & Pricing</h2>
-            <p className="text-text-light max-w-2xl mx-auto">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 px-2">Our Services & Pricing</h2>
+            <p className="text-sm sm:text-base text-text-light max-w-2xl mx-auto px-4">
               Tailored solutions for your garment care needs, delivered with uncompromising attention to detail.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 md:gap-6">
             {isLoadingServices ? (
               // Loading state
               Array.from({ length: 4 }).map((_, index) => (
@@ -966,13 +986,13 @@ export default function Home() {
           </div>
 
           <motion.div
-            className="mt-12 text-center"
+            className="mt-8 sm:mt-10 md:mt-12 text-center"
             initial={{ opacity: 0 }}
             animate={servicesInView ? { opacity: 1 } : {}}
             transition={{ duration: 0.6, delay: 0.6 }}
           >
             <Link href="/services">
-              <Button variant="outline" className="border-primary text-primary hover:bg-primary/5 rounded-xl px-8">
+              <Button variant="outline" className="border-primary text-primary hover:bg-primary/5 rounded-xl px-6 sm:px-8 py-2 text-sm sm:text-base w-full sm:w-auto">
                 View All Services <ChevronRight className="ml-2 w-4 h-4" />
               </Button>
             </Link>
@@ -981,21 +1001,21 @@ export default function Home() {
       </section>
 
       {/* How It Works Section */}
-      <section ref={howItWorksRef} className="py-12">
-        <div className="container px-4 md:px-6">
+      <section ref={howItWorksRef} className="py-10 sm:py-12 md:py-16 bg-gradient-to-br from-gray-50 via-primary/5 to-accent/5">
+        <div className="container px-4 sm:px-6 md:px-8">
           <motion.div
-            className="text-center mb-12"
+            className="text-center mb-10 sm:mb-12 md:mb-16"
             initial={{ opacity: 0, y: 20 }}
             animate={howItWorksInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
-            <p className="text-text-light max-w-2xl mx-auto">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 text-gray-900 px-2">How It Works</h2>
+            <p className="text-sm sm:text-base md:text-lg text-gray-600 max-w-2xl mx-auto px-4">
               A seamless experience from pickup to delivery, designed with your convenience in mind.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 md:gap-6">
             {howItWorksSteps.map((step, index) => (
               <motion.div
                 key={step.id}
@@ -1009,7 +1029,7 @@ export default function Home() {
           </div>
 
           <motion.div
-            className="mt-16 p-8 bg-secondary rounded-2xl luxury-shadow"
+            className="mt-8 sm:mt-12 md:mt-16 p-4 sm:p-6 md:p-8 bg-secondary rounded-xl sm:rounded-2xl luxury-shadow"
             initial={{ opacity: 0, y: 20 }}
             animate={howItWorksInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.6 }}
@@ -1025,24 +1045,24 @@ export default function Home() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
-                    className="grid lg:grid-cols-2 gap-8 items-center"
+                    className="grid lg:grid-cols-2 gap-6 sm:gap-8 items-center"
                   >
-                    <div>
-                      <h3 className="text-2xl font-bold mb-4">{promotions[currentPromotionIndex].title}</h3>
-                      <p className="text-text-light mb-6">
+                    <div className="order-2 lg:order-1">
+                      <h3 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">{promotions[currentPromotionIndex].title}</h3>
+                      <p className="text-sm sm:text-base text-text-light mb-4 sm:mb-6">
                         {promotions[currentPromotionIndex].description}
                         {promotions[currentPromotionIndex].promoCode && (
                           <span className="font-semibold text-accent ml-1">{promotions[currentPromotionIndex].promoCode}</span>
                         )}
                       </p>
-                      <Link href="/book">
-                        <Button size="lg" className="bg-accent hover:bg-accent/90 text-white rounded-xl px-8">
+                      <Link href="/book" className="inline-block">
+                        <Button size="lg" className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-white rounded-xl px-6 sm:px-8 text-sm sm:text-base">
                           Book Your Pickup
                         </Button>
                       </Link>
                     </div>
                     {promotions[currentPromotionIndex].bannerImage && (
-                      <div className="relative h-[200px] lg:h-[250px] rounded-xl overflow-hidden">
+                      <div className="relative h-[180px] sm:h-[200px] lg:h-[250px] rounded-xl overflow-hidden order-1 lg:order-2">
                         <Image
                           src={promotions[currentPromotionIndex].bannerImage}
                           alt={promotions[currentPromotionIndex].title}
@@ -1076,22 +1096,22 @@ export default function Home() {
       </section>
 
       {/* Testimonials Section */}
-      <section ref={testimonialsRef} className="py-20 bg-secondary">
-        <div className="container px-4 md:px-6">
+      <section ref={testimonialsRef} className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-gray-50 via-primary/5 to-accent/5">
+        <div className="container px-4 sm:px-6 md:px-8">
           <motion.div
-            className="text-center mb-12"
+            className="text-center mb-10 sm:mb-12 md:mb-16"
             initial={{ opacity: 0, y: 20 }}
             animate={testimonialsInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">What Our Clients Say</h2>
-            <p className="text-text-light max-w-2xl mx-auto mb-6">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4 text-gray-900 px-2">What Our Clients Say</h2>
+            <p className="text-sm sm:text-base md:text-lg text-gray-600 max-w-2xl mx-auto mb-4 sm:mb-5 md:mb-6 px-4">
               Don't just take our word for it. Hear from our satisfied clients about their experience.
             </p>
             
             <Dialog open={isTestimonialModalOpen} onOpenChange={setIsTestimonialModalOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-accent hover:bg-accent/90 text-white rounded-xl px-6 py-2">
+                <Button className="bg-accent hover:bg-accent/90 text-white rounded-xl px-5 sm:px-6 py-2 text-sm sm:text-base">
                   <MessageSquare className="w-4 h-4 mr-2" />
                   Add Your Testimonial
                 </Button>
@@ -1110,22 +1130,22 @@ export default function Home() {
 
           {isLoadingTestimonials ? (
             // Loading state
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 md:gap-6">
               {Array.from({ length: 3 }).map((_, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, y: 20 }}
                   animate={testimonialsInView ? { opacity: 1, y: 0 } : {}}
                   transition={{ duration: 0.6, delay: 0.1 * index }}
-                  className="bg-white rounded-2xl p-6 luxury-shadow h-full flex items-center justify-center"
+                  className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 luxury-shadow h-full flex items-center justify-center"
                 >
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
                 </motion.div>
               ))}
             </div>
           ) : displayTestimonials.length > 0 ? (
             // Show real testimonials
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 md:gap-6">
               {displayTestimonials.map((testimonial, index) => (
                 <motion.div
                   key={testimonial._id}

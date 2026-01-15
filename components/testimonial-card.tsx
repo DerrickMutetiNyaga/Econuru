@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { Star, User, UserCheck } from "lucide-react"
+import { Star, User, UserCheck, Quote } from "lucide-react"
 
 interface TestimonialCardProps {
   testimonial: {
@@ -18,60 +18,89 @@ interface TestimonialCardProps {
   }
 }
 
+const colorVariants = [
+  { bg: 'from-primary/10 via-accent/5 to-primary/5', border: 'border-primary/30', accent: 'text-primary' },
+  { bg: 'from-accent/10 via-primary/5 to-accent/5', border: 'border-accent/30', accent: 'text-accent' },
+  { bg: 'from-purple-50 via-primary/5 to-purple-50', border: 'border-primary/30', accent: 'text-primary' },
+]
+
 export function TestimonialCard({ testimonial }: TestimonialCardProps) {
-  // Gender-specific icon component
+  // Assign color based on testimonial ID for consistency
+  const colorIndex = parseInt(testimonial._id.slice(-1), 16) % 3
+  const colors = colorVariants[colorIndex]
+
+  // Gender-specific icon component with theme colors
   const GenderIcon = ({ gender }: { gender?: 'male' | 'female' }) => {
     if (gender === 'male') {
       return (
-        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center border-2 border-blue-200">
-          <User className="w-6 h-6 text-blue-600" />
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border-2 border-primary/30 shadow-md shrink-0">
+          <User className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
         </div>
       )
     } else if (gender === 'female') {
       return (
-        <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center border-2 border-pink-200">
-          <UserCheck className="w-6 h-6 text-pink-600" />
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-accent/20 to-accent/10 flex items-center justify-center border-2 border-accent/30 shadow-md shrink-0">
+          <UserCheck className="w-6 h-6 sm:w-7 sm:h-7 text-accent" />
         </div>
       )
     } else {
       // Fallback for testimonials without gender
       return (
-        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center border-2 border-gray-200">
-          <User className="w-6 h-6 text-gray-600" />
+        <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br ${colors.bg} flex items-center justify-center border-2 ${colors.border} shadow-md shrink-0`}>
+          <User className={`w-6 h-6 sm:w-7 sm:h-7 ${colors.accent}`} />
         </div>
       )
     }
   }
 
   return (
-    <motion.div className="bg-white rounded-2xl p-6 luxury-shadow h-full flex flex-col" whileHover={{ y: -5 }}>
-      <div className="flex items-center gap-4 mb-4">
-        <GenderIcon gender={testimonial.gender} />
-        <div>
-          <h4 className="font-semibold">{testimonial.name}</h4>
-          <p className="text-text-light text-sm">{testimonial.role || "Client"}</p>
+    <motion.div 
+      className={`group relative bg-gradient-to-br ${colors.bg} ${colors.border} border-t-4 rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 luxury-shadow h-full flex flex-col overflow-hidden`}
+      whileHover={{ y: -8, scale: 1.02 }}
+      transition={{ duration: 0.3 }}
+    >
+      {/* Decorative background elements - hidden on mobile */}
+      <div className="hidden sm:block absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-primary/5 to-transparent rounded-full -mr-12 -mt-12" />
+      <div className="hidden sm:block absolute bottom-0 left-0 w-20 h-20 bg-gradient-to-tr from-accent/5 to-transparent rounded-full -ml-10 -mb-10" />
+      
+      <div className="relative z-10 flex flex-col h-full">
+        {/* Quote icon at top */}
+        <div className="flex justify-between items-start mb-3 sm:mb-4">
+          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${colors.bg} flex items-center justify-center border ${colors.border} opacity-60`}>
+            <Quote className={`w-4 h-4 sm:w-5 sm:h-5 ${colors.accent}`} />
+          </div>
         </div>
-      </div>
 
-      <div className="flex mb-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Star
-            key={i}
-            className={`w-4 h-4 ${i < testimonial.rating ? "fill-accent text-accent" : "fill-muted text-muted"}`}
-          />
-        ))}
-      </div>
-
-      <p className="text-text-light text-sm flex-grow">{testimonial.content}</p>
-
-      <div className="mt-4 flex justify-end">
-        <div className="w-8 h-8">
-          <svg viewBox="0 0 24 24" fill="none" className="text-accent opacity-20">
-            <path
-              d="M14.017 18L14.017 10.609C14.017 4.905 17.748 1.039 23 0L23.995 2.151C21.563 3.068 20 5.789 20 8H24V18H14.017ZM0 18V10.609C0 4.905 3.748 1.039 9 0L9.996 2.151C7.563 3.068 6 5.789 6 8H9.983L9.983 18L0 18Z"
-              fill="currentColor"
+        {/* Rating stars */}
+        <div className="flex mb-3 sm:mb-4 gap-1">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Star
+              key={i}
+              className={`w-4 h-4 sm:w-5 sm:h-5 transition-all duration-200 ${
+                i < testimonial.rating 
+                  ? "fill-accent text-accent scale-110" 
+                  : "fill-gray-200 text-gray-300"
+              }`}
             />
-          </svg>
+          ))}
+        </div>
+
+        {/* Testimonial content */}
+        <p className="text-gray-700 text-xs sm:text-sm flex-grow leading-relaxed mb-4 sm:mb-6 relative line-clamp-4">
+          "{testimonial.content}"
+        </p>
+
+        {/* Author info */}
+        <div className="flex items-center gap-3 sm:gap-4 mt-auto pt-3 sm:pt-4 border-t border-gray-200/50">
+          <GenderIcon gender={testimonial.gender} />
+          <div className="flex-1 min-w-0">
+            <h4 className="font-bold text-sm sm:text-base text-gray-900 group-hover:text-primary transition-colors duration-300 truncate">
+              {testimonial.name}
+            </h4>
+            <p className="text-gray-600 text-xs sm:text-sm font-medium">
+              {testimonial.role || "Client"}
+            </p>
+          </div>
         </div>
       </div>
     </motion.div>
