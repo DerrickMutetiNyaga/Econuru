@@ -199,6 +199,12 @@ export const GET = requireAuth(async (request: NextRequest, { params }: { params
     return NextResponse.json({
       success: true,
       order
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     });
 
   } catch (error) {

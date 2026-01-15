@@ -253,6 +253,8 @@ export default function POSPage() {
 
   // Add a loading state for order editing
   const [orderLoading, setOrderLoading] = useState(false);
+  // Track if order has been loaded to prevent reload loops
+  const orderLoadedRef = useRef<string | null>(null);
 
   // SMS State
   const [sendSMS, setSendSMS] = useState(true);
@@ -990,18 +992,23 @@ Need help? Call us at +254 757 883 799`;
 
   // Load order for editing after services are loaded
   useEffect(() => {
-    if (services.length > 0 && isEditing && editingOrderId) {
+    // Only load if: services are available, we're editing, have an order ID, and haven't already loaded this order
+    if (services.length > 0 && isEditing && editingOrderId && orderLoadedRef.current !== editingOrderId) {
       setOrderLoading(true);
       (async () => {
         try {
           const response = await fetch(`/api/orders/${editingOrderId}`, {
             headers: {
               'Authorization': `Bearer ${token}`,
+              'Cache-Control': 'no-cache', // Prevent caching issues
             },
           });
           if (response.ok) {
             const data = await response.json();
             const order = data.order;
+            
+            // Mark this order as loaded to prevent reload loops
+            orderLoadedRef.current = editingOrderId;
             
             // Store previous statuses for SMS comparison
             setPreviousPaymentStatus(order.paymentStatus || 'unpaid');
@@ -1050,19 +1057,26 @@ Need help? Call us at +254 757 883 799`;
         }
       })();
     }
-  }, [services, isEditing, editingOrderId, token]);
+  }, [services.length, isEditing, editingOrderId, token]); // Use services.length instead of services array
 
   // Add this useEffect at the top of the component
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const editOrderId = urlParams.get('editOrder');
-      if (editOrderId) {
+      if (editOrderId && editOrderId !== editingOrderId) {
+        // Reset the loaded order ref when switching to a new order
+        orderLoadedRef.current = null;
         setEditingOrderId(editOrderId);
         setIsEditing(true);
+      } else if (!editOrderId && isEditing) {
+        // Reset when leaving edit mode
+        orderLoadedRef.current = null;
+        setIsEditing(false);
+        setEditingOrderId(null);
       }
     }
-  }, []);
+  }, []); // Only run on mount to check URL params
 
   // Lock in promotion function (called when promo is successfully validated)
   const lockInPromotion = async (code, orderAmount) => {
@@ -1200,6 +1214,7 @@ Need help? Call us at +254 757 883 799`;
                   <Button
                     variant="outline"
                     onClick={() => {
+                      orderLoadedRef.current = null; // Reset loaded order ref
                       setIsEditing(false);
                       setEditingOrderId(null);
                       clearCart();
@@ -2003,6 +2018,7 @@ Need help? Call us at +254 757 883 799`;
               <Button 
                 variant="outline"
                 onClick={() => {
+                  orderLoadedRef.current = null; // Reset loaded order ref
                   setSuccessDialogOpen(false);
                   setOrderSuccess(false);
                   setIsEditing(false);
