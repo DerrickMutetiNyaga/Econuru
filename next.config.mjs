@@ -6,6 +6,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Add empty turbopack config to silence the warning
+  // The webpack config below will still be used when webpack is explicitly enabled
+  turbopack: {},
   // Improve chunk loading reliability
   webpack: (config, { isServer }) => {
     if (!isServer) {
