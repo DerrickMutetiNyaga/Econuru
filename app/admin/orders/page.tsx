@@ -1171,6 +1171,11 @@ export default function OrdersPage() {
   // Print receipt function
   // Generate receipt HTML content
   const generateReceiptHTML = (order: Order) => {
+    const paymentStatusColor = (order.paymentStatus || 'unpaid') === 'paid' ? '#2E7D32' : 
+                               (order.paymentStatus || 'unpaid') === 'partial' ? '#ff9800' : '#d32f2f';
+    const paymentStatusBg = (order.paymentStatus || 'unpaid') === 'paid' ? '#e8f5e9' : 
+                            (order.paymentStatus || 'unpaid') === 'partial' ? '#fff3e0' : '#ffebee';
+    
     return `
       <!DOCTYPE html>
       <html>
@@ -1178,418 +1183,713 @@ export default function OrdersPage() {
         <title>Receipt - ${order.orderNumber}</title>
         <meta charset="UTF-8">
         <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+          
           * { box-sizing: border-box; margin: 0; padding: 0; }
+          
           body {
-            font-family: 'Arial', 'Helvetica', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
             margin: 0;
             padding: 0;
-            background: #ffffff;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             color: #1a1a1a;
-            font-size: 9px;
-            line-height: 1.3;
+            font-size: 10px;
+            line-height: 1.4;
           }
+          
           .receipt {
             max-width: 21cm;
             margin: 0 auto;
-            padding: 8mm;
+            padding: 10mm;
             background: white;
+            box-shadow: 0 0 30px rgba(0,0,0,0.1);
           }
+          
+          /* Header with gradient */
           .header {
-            text-align: center;
-            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
+            background: linear-gradient(135deg, #3C9D9B 0%, #2E7D32 50%, #D4AF37 100%);
             color: white;
-            padding: 10px 15px;
-            margin-bottom: 8px;
-            border-radius: 4px;
+            padding: 12px 20px;
+            margin: -10mm -10mm 12px -10mm;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
           }
+          
+          .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+          }
+          
           .business-name {
-            font-size: 20px;
+            font-size: 22px;
             font-weight: 700;
             margin-bottom: 3px;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
+            position: relative;
+            z-index: 1;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
           }
+          
           .business-tagline {
             font-size: 10px;
             opacity: 0.95;
+            font-weight: 400;
+            position: relative;
+            z-index: 1;
           }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 6px;
-            font-size: 9px;
+          
+          .receipt-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 2px 8px;
+            border-radius: 15px;
+            font-size: 8px;
+            margin-top: 4px;
+            backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 1;
           }
-          .info-table td {
-            padding: 4px 8px;
-            border: 1px solid #e0e0e0;
+          
+          /* Customer Info Section */
+          .customer-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 3px solid #3C9D9B;
           }
-          .info-table td:first-child {
-            background: #f5f5f5;
-            font-weight: 600;
-            width: 35%;
-            color: #555;
-          }
-          .info-table td:last-child {
-            background: white;
-            color: #1a1a1a;
-          }
-          .services-table {
-            margin-top: 6px;
-          }
-          .services-table th {
-            background: #2E7D32;
-            color: white;
-            padding: 6px 8px;
-            text-align: left;
-            font-weight: 700;
+          
+          .section-title {
             font-size: 10px;
+            font-weight: 700;
+            color: #3C9D9B;
             text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
           }
-          .services-table td {
-            padding: 5px 8px;
+          
+          .section-title::before {
+            content: '';
+            width: 3px;
+            height: 12px;
+            background: linear-gradient(135deg, #3C9D9B, #D4AF37);
+            border-radius: 2px;
+          }
+          
+          .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 6px;
+          }
+          
+          .info-item {
+            background: white;
+            padding: 6px 8px;
+            border-radius: 6px;
             border: 1px solid #e0e0e0;
+          }
+          
+          .info-label {
+            font-size: 8px;
+            color: #666;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 2px;
+          }
+          
+          .info-value {
+            font-size: 10px;
+            color: #1a1a1a;
+            font-weight: 600;
+            line-height: 1.3;
+          }
+          
+          .info-value.order-number {
+            font-size: 11px;
+            color: #3C9D9B;
+            font-weight: 700;
+          }
+          
+          /* Services Table */
+          .services-section {
+            margin: 12px 0;
+          }
+          
+          .services-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 10px;
+          }
+          
+          .services-table thead {
+            background: linear-gradient(135deg, #3C9D9B 0%, #2E7D32 100%);
+          }
+          
+          .services-table th {
+            color: white;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+          }
+          
+          .services-table th:last-child {
+            text-align: right;
+          }
+          
+          .services-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #f0f0f0;
             vertical-align: top;
           }
-          .services-table tr:nth-child(even) {
-            background: #f9f9f9;
+          
+          .services-table tbody tr {
+            background: white;
+            transition: background 0.2s;
           }
+          
+          .services-table tbody tr:nth-child(even) {
+            background: #fafbfc;
+          }
+          
+          .services-table tbody tr:last-child td {
+            border-bottom: none;
+          }
+          
           .service-name {
             font-weight: 600;
             color: #1a1a1a;
+            font-size: 10px;
+            margin-bottom: 2px;
           }
+          
           .service-details {
             font-size: 8px;
-            color: #777;
-            margin-top: 2px;
+            color: #666;
+            font-weight: 400;
           }
+          
           .service-price {
             text-align: right;
-            font-weight: 600;
-            color: #2E7D32;
+            font-weight: 700;
+            color: #3C9D9B;
+            font-size: 11px;
           }
+          
+          /* Totals Section */
+          .totals-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 12px 0;
+            border: 2px solid #e9ecef;
+          }
+          
           .totals-table {
-            margin-top: 6px;
+            width: 100%;
+            border-collapse: collapse;
           }
+          
+          .totals-table tr {
+            border-bottom: 1px solid #e9ecef;
+          }
+          
+          .totals-table tr:last-child {
+            border-bottom: none;
+          }
+          
           .totals-table td {
-            padding: 4px 8px;
-            border: 1px solid #e0e0e0;
+            padding: 6px 0;
+            font-size: 10px;
           }
+          
           .totals-table td:first-child {
-            background: #f5f5f5;
-            font-weight: 600;
-            width: 70%;
+            color: #666;
+            font-weight: 500;
           }
+          
           .totals-table td:last-child {
             text-align: right;
             font-weight: 600;
+            color: #1a1a1a;
+            font-size: 11px;
           }
+          
+          .discount-row td {
+            color: #2E7D32 !important;
+          }
+          
+          .final-total-row {
+            background: linear-gradient(135deg, #3C9D9B 0%, #2E7D32 100%) !important;
+            border-radius: 6px;
+            margin-top: 6px;
+          }
+          
           .final-total-row td {
-            background: #2E7D32 !important;
+            background: transparent !important;
             color: white !important;
-            font-size: 12px;
-            font-weight: 700;
-            padding: 6px 8px;
+            font-size: 14px !important;
+            font-weight: 700 !important;
+            padding: 8px 0 !important;
             border: none !important;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
           }
-          .payment-box {
-            margin: 8px 0;
-            border: 2px solid #2E7D32;
-            border-radius: 4px;
+          
+          /* Payment Status Card */
+          .payment-card {
+            background: ${paymentStatusBg};
+            border: 2px solid ${paymentStatusColor};
+            border-radius: 8px;
+            padding: 0;
+            margin: 12px 0;
             overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
           }
+          
           .payment-header {
-            background: #2E7D32;
+            background: ${paymentStatusColor};
             color: white;
-            padding: 6px;
+            padding: 8px 15px;
             text-align: center;
             font-weight: 700;
-            font-size: 10px;
+            font-size: 9px;
             text-transform: uppercase;
+            letter-spacing: 0.8px;
           }
+          
           .payment-body {
-            padding: 8px;
-            background: #f5f5f5;
+            padding: 12px;
             text-align: center;
+            background: white;
           }
+          
           .payment-status {
             font-size: 18px;
             font-weight: 700;
             margin: 4px 0;
-            color: ${(order.paymentStatus || 'unpaid') === 'paid' ? '#2E7D32' : (order.paymentStatus || 'unpaid') === 'partial' ? '#ff9800' : '#d32f2f'};
+            color: ${paymentStatusColor};
+            letter-spacing: 1.5px;
           }
-          .mpesa-box {
+          
+          .payment-details {
+            font-size: 9px;
+            color: #666;
             margin-top: 8px;
-            padding: 8px;
-            background: #e8f5e9;
-            border: 1px solid #2E7D32;
-            border-radius: 3px;
-            font-size: 8.5px;
+            padding-top: 8px;
+            border-top: 1px solid #e0e0e0;
           }
+          
+          /* M-Pesa Payment Instructions */
+          .mpesa-instructions {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 2px solid #1976D2;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 12px 0;
+          }
+          
           .mpesa-title {
             font-weight: 700;
-            color: #2E7D32;
-            margin-bottom: 5px;
-            font-size: 9px;
+            color: #1976D2;
+            margin-bottom: 8px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
           }
-          .mpesa-steps {
-            display: table;
-            width: 100%;
-          }
+          
           .mpesa-step {
-            display: table-row;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(25, 118, 210, 0.2);
           }
-          .mpesa-step > div {
-            display: table-cell;
-            padding: 2px 0;
+          
+          .mpesa-step:last-child {
+            border-bottom: none;
           }
-          .mpesa-step > div:first-child {
-            width: 20px;
+          
+          .step-number {
+            background: #1976D2;
+            color: white;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-weight: 700;
-            color: #2E7D32;
+            font-size: 9px;
+            flex-shrink: 0;
           }
+          
+          .step-content {
+            flex: 1;
+            font-size: 9px;
+            color: #1a1a1a;
+            line-height: 1.4;
+          }
+          
           .till-number {
             display: inline-block;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 700;
             color: #1976D2;
             background: white;
-            padding: 3px 8px;
+            padding: 4px 8px;
             border: 2px solid #1976D2;
-            border-radius: 3px;
+            border-radius: 4px;
             letter-spacing: 1.5px;
             margin: 2px 0;
           }
-          .notes-box {
-            margin: 6px 0;
-            padding: 6px;
-            background: #fff9e6;
-            border-left: 3px solid #ff9800;
-            font-size: 8.5px;
-          }
-          .footer {
+          
+          .mpesa-reference {
             margin-top: 8px;
             padding-top: 6px;
-            border-top: 2px solid #e0e0e0;
-            text-align: center;
+            border-top: 1px solid rgba(25, 118, 210, 0.3);
             font-size: 8px;
             color: #666;
+            font-style: italic;
           }
-          .thank-you {
-            font-size: 10px;
+          
+          /* Notes Box */
+          .notes-box {
+            background: linear-gradient(135deg, #fff9e6 0%, #ffe0b2 100%);
+            border-left: 3px solid #ff9800;
+            border-radius: 6px;
+            padding: 8px;
+            margin: 12px 0;
+          }
+          
+          .notes-title {
             font-weight: 700;
-            color: #2E7D32;
             margin-bottom: 4px;
+            color: #e65100;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
           }
-          .contact-row {
-            margin: 3px 0;
-            font-size: 8px;
+          
+          .notes-content {
+            font-size: 9px;
+            color: #1a1a1a;
+            line-height: 1.4;
           }
+          
+          /* Footer */
+          .footer {
+            margin-top: 15px;
+            padding-top: 12px;
+            border-top: 2px solid #e9ecef;
+            text-align: center;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            padding: 12px;
+            border-radius: 8px;
+            margin-left: -10mm;
+            margin-right: -10mm;
+            margin-bottom: -10mm;
+          }
+          
+          .thank-you {
+            font-size: 12px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #3C9D9B, #D4AF37);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+            letter-spacing: 0.8px;
+          }
+          
+          .contact-info {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 8px 0;
+            font-size: 9px;
+            color: #666;
+            flex-wrap: wrap;
+          }
+          
+          .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+          }
+          
           .mpesa-footer {
-            margin: 4px 0;
-            padding: 5px;
-            background: #e3f2fd;
-            border: 1px solid #1976D2;
-            border-radius: 3px;
-            display: inline-block;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 2px solid #1976D2;
+            border-radius: 8px;
+            padding: 8px 16px;
+            display: block;
+            margin: 8px auto;
+            text-align: center;
+            width: fit-content;
+            max-width: 90%;
+            box-sizing: border-box;
           }
+          
           .mpesa-footer-label {
             font-weight: 600;
             color: #1976D2;
-            font-size: 8px;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 4px;
+            display: block;
           }
+          
+          .mpesa-footer-till {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1976D2;
+            letter-spacing: 3px;
+            display: block;
+            text-align: center;
+            margin: 0;
+          }
+          
+          .footer-note {
+            margin-top: 8px;
+            font-size: 8px;
+            color: #999;
+            line-height: 1.3;
+            font-style: italic;
+          }
+          
           @media print {
             @page {
               size: A4;
-              margin: 8mm;
+              margin: 0;
             }
             body {
-              font-size: 8.5px;
-              padding: 0;
+              background: white;
+              font-size: 10px;
             }
             .receipt {
-              padding: 0;
-              max-width: 100%;
+              box-shadow: none;
+              padding: 10mm;
             }
             .header {
-              margin-bottom: 6px;
-              padding: 8px 12px;
-            }
-            .business-name {
-              font-size: 18px;
-            }
-            table {
-              margin-bottom: 5px;
-            }
-            .payment-box {
-              margin: 6px 0;
+              margin: -10mm -10mm 15px -10mm;
+              padding: 15px 20px;
             }
             .footer {
-              margin-top: 6px;
-              padding-top: 5px;
+              margin-left: -10mm;
+              margin-right: -10mm;
+              margin-bottom: -10mm;
             }
           }
         </style>
       </head>
       <body>
         <div class="receipt">
+          <!-- Header -->
           <div class="header">
-            <div class="business-name">ECONURU LAUNDRY</div>
-            <div class="business-tagline">Professional Laundry Services</div>
+            <div class="business-name">ECONURU</div>
+            <div class="business-tagline">Premium Laundry Services</div>
+            <div class="receipt-badge">OFFICIAL RECEIPT</div>
           </div>
 
-          <table class="info-table">
-            <tr>
-              <td>Order Number</td>
-              <td><strong>${order.orderNumber}</strong></td>
-            </tr>
-            <tr>
-              <td>Date</td>
-              <td>${formatDate(order.createdAt)}</td>
-            </tr>
-            <tr>
-              <td>Time</td>
-              <td>${new Date(order.createdAt).toLocaleTimeString()}</td>
-            </tr>
-            ${order.pickupDate ? `
-            <tr>
-              <td>Pickup Date</td>
-              <td>${order.pickupDate}${order.pickupTime ? ' ' + order.pickupTime : ''}</td>
-            </tr>
-            ` : ''}
-            <tr>
-              <td>Customer Name</td>
-              <td><strong>${order.customer.name}</strong></td>
-            </tr>
-            <tr>
-              <td>Phone</td>
-              <td>${order.customer.phone}</td>
-            </tr>
-            ${order.customer.email ? `
-            <tr>
-              <td>Email</td>
-              <td>${order.customer.email}</td>
-            </tr>
-            ` : ''}
-            ${order.customer.address ? `
-            <tr>
-              <td>Address</td>
-              <td>${order.customer.address}</td>
-            </tr>
-            ` : ''}
-            <tr>
-              <td>Location</td>
-              <td>${order.location}</td>
-            </tr>
-          </table>
+          <!-- Customer Information -->
+          <div class="customer-section">
+            <div class="section-title">Order Information</div>
+            <div class="info-grid">
+              <div class="info-item">
+                <div class="info-label">Order Number</div>
+                <div class="info-value order-number">${order.orderNumber}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Date & Time</div>
+                <div class="info-value">${formatDate(order.createdAt)}<br><span style="font-size: 10px; color: #666;">${new Date(order.createdAt).toLocaleTimeString()}</span></div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Customer Name</div>
+                <div class="info-value">${order.customer.name}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Phone Number</div>
+                <div class="info-value">${order.customer.phone}</div>
+              </div>
+              ${order.customer.email ? `
+              <div class="info-item">
+                <div class="info-label">Email</div>
+                <div class="info-value">${order.customer.email}</div>
+              </div>
+              ` : ''}
+              ${order.customer.address ? `
+              <div class="info-item" style="grid-column: 1 / -1;">
+                <div class="info-label">Delivery Address</div>
+                <div class="info-value">${order.customer.address}</div>
+              </div>
+              ` : ''}
+              ${order.pickupDate ? `
+              <div class="info-item">
+                <div class="info-label">Pickup Date</div>
+                <div class="info-value">${order.pickupDate}${order.pickupTime ? ' ' + order.pickupTime : ''}</div>
+              </div>
+              ` : ''}
+              <div class="info-item">
+                <div class="info-label">Location</div>
+                <div class="info-value">${order.location}</div>
+              </div>
+            </div>
+          </div>
 
-          <table class="services-table">
-            <thead>
-              <tr>
-                <th style="width: 60%;">Service</th>
-                <th style="width: 40%; text-align: right;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${order.services.map(service => `
+          <!-- Services -->
+          <div class="services-section">
+            <div class="section-title">Services Ordered</div>
+            <table class="services-table">
+              <thead>
                 <tr>
-                  <td>
-                    <div class="service-name">${service.serviceName}</div>
-                    <div class="service-details">Qty: ${service.quantity} × Ksh ${parseFloat(service.price).toLocaleString()}</div>
-                  </td>
-                  <td class="service-price">Ksh ${(parseFloat(service.price) * service.quantity).toLocaleString()}</td>
+                  <th>Service</th>
+                  <th style="text-align: right;">Amount</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${order.services.map(service => `
+                  <tr>
+                    <td>
+                      <div class="service-name">${service.serviceName}</div>
+                      <div class="service-details">Quantity: ${service.quantity} × Ksh ${parseFloat(service.price).toLocaleString()}</div>
+                    </td>
+                    <td class="service-price">Ksh ${(parseFloat(service.price) * service.quantity).toLocaleString()}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
 
-          <table class="totals-table">
-            <tr>
-              <td>Subtotal</td>
-              <td>Ksh ${(order.totalAmount - (order.pickDropAmount || 0) + (order.discount || 0) + (order.promoDiscount || 0)).toLocaleString()}</td>
-            </tr>
-            ${(order.pickDropAmount || 0) > 0 ? `
-            <tr>
-              <td>Pick & Drop</td>
-              <td>+Ksh ${(order.pickDropAmount || 0).toLocaleString()}</td>
-            </tr>
-            ` : ''}
-            ${(order.discount || 0) > 0 ? `
-            <tr>
-              <td>Discount</td>
-              <td>-Ksh ${(order.discount || 0).toLocaleString()}</td>
-            </tr>
-            ` : ''}
-            ${(order.promoDiscount || 0) > 0 ? `
-            <tr>
-              <td>Promo Discount</td>
-              <td>-Ksh ${(order.promoDiscount || 0).toLocaleString()}</td>
-            </tr>
-            ` : ''}
-            <tr class="final-total-row">
-              <td>TOTAL</td>
-              <td>Ksh ${(order.totalAmount || 0).toLocaleString()}</td>
-            </tr>
-          </table>
+          <!-- Totals -->
+          <div class="totals-section">
+            <table class="totals-table">
+              <tr>
+                <td>Subtotal</td>
+                <td>Ksh ${(order.totalAmount - (order.pickDropAmount || 0) + (order.discount || 0) + (order.promoDiscount || 0)).toLocaleString()}</td>
+              </tr>
+              ${(order.pickDropAmount || 0) > 0 ? `
+              <tr>
+                <td>Pick & Drop Fee</td>
+                <td style="color: #3C9D9B;">+Ksh ${(order.pickDropAmount || 0).toLocaleString()}</td>
+              </tr>
+              ` : ''}
+              ${(order.discount || 0) > 0 ? `
+              <tr class="discount-row">
+                <td>Discount</td>
+                <td>-Ksh ${(order.discount || 0).toLocaleString()}</td>
+              </tr>
+              ` : ''}
+              ${(order.promoDiscount || 0) > 0 ? `
+              <tr class="discount-row">
+                <td>Promo Discount${order.promoCode ? ` (${order.promoCode})` : ''}</td>
+                <td>-Ksh ${(order.promoDiscount || 0).toLocaleString()}</td>
+              </tr>
+              ` : ''}
+              <tr class="final-total-row">
+                <td>Total Amount</td>
+                <td>Ksh ${(order.totalAmount || 0).toLocaleString()}</td>
+              </tr>
+            </table>
+          </div>
 
-          <div class="payment-box">
+          <!-- Payment Status -->
+          <div class="payment-card">
             <div class="payment-header">Payment Status</div>
             <div class="payment-body">
               <div class="payment-status">${(order.paymentStatus || 'unpaid').toUpperCase()}</div>
               ${(order.paymentStatus || 'unpaid') === 'partial' && order.remainingBalance ? `
-              <div style="font-size: 9px; margin-top: 4px;">
-                Paid: Ksh ${((order.totalAmount || 0) - (order.remainingBalance || 0)).toLocaleString()} | 
-                Remaining: Ksh ${(order.remainingBalance || 0).toLocaleString()}
+              <div class="payment-details">
+                <div style="margin-bottom: 6px;">Paid: <strong style="color: #2E7D32;">Ksh ${((order.totalAmount || 0) - (order.remainingBalance || 0)).toLocaleString()}</strong></div>
+                <div>Remaining Balance: <strong style="color: #ff9800;">Ksh ${(order.remainingBalance || 0).toLocaleString()}</strong></div>
               </div>
               ` : ''}
               ${(order.paymentStatus === 'paid' || order.paymentStatus === 'partial') && (order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber) ? `
-              <div style="font-size: 8px; margin-top: 4px; color: #666;">
-                M-Pesa Receipt: ${order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber}
-              </div>
-              ` : ''}
-              ${(order.paymentStatus === 'unpaid' || order.paymentStatus === 'partial') ? `
-              <div class="mpesa-box">
-                <div class="mpesa-title">Pay via M-Pesa</div>
-                <div class="mpesa-steps">
-                  <div class="mpesa-step">
-                    <div>1.</div>
-                    <div>Go to M-Pesa Menu → Pay Bill</div>
-                  </div>
-                  <div class="mpesa-step">
-                    <div>2.</div>
-                    <div>Enter Till Number: <span class="till-number">5251257</span></div>
-                  </div>
-                  <div class="mpesa-step">
-                    <div>3.</div>
-                    <div>Enter Amount: <strong>Ksh ${order.paymentStatus === 'partial' && order.remainingBalance ? order.remainingBalance.toLocaleString() : (order.totalAmount || 0).toLocaleString()}</strong></div>
-                  </div>
-                  <div class="mpesa-step">
-                    <div>4.</div>
-                    <div>Enter your M-Pesa PIN</div>
-                  </div>
-                </div>
-                <div style="margin-top: 5px; font-size: 7.5px; color: #666; font-style: italic;">
-                  Reference: Order #${order.orderNumber}
+              <div class="payment-details">
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0;">
+                  <div style="font-size: 10px; color: #666; margin-bottom: 4px;">M-Pesa Receipt Number:</div>
+                  <div style="font-size: 14px; font-weight: 700; color: #1976D2; letter-spacing: 1px;">${order.mpesaPayment?.mpesaReceiptNumber || order.mpesaReceiptNumber}</div>
                 </div>
               </div>
               ` : ''}
             </div>
           </div>
 
-          ${order.notes ? `
-          <div class="notes-box">
-            <div style="font-weight: 700; margin-bottom: 3px; color: #ff9800;">NOTES:</div>
-            <div>${order.notes}</div>
+          ${(order.paymentStatus === 'unpaid' || order.paymentStatus === 'partial') ? `
+          <!-- M-Pesa Instructions -->
+          <div class="mpesa-instructions">
+            <div class="mpesa-title">📱 Pay via M-Pesa</div>
+            <div class="mpesa-step">
+              <div class="step-number">1</div>
+              <div class="step-content">Go to <strong>M-Pesa Menu</strong> → Select <strong>Pay Bill</strong></div>
+            </div>
+            <div class="mpesa-step">
+              <div class="step-number">2</div>
+              <div class="step-content">Enter Till Number: <span class="till-number">5251257</span></div>
+            </div>
+            <div class="mpesa-step">
+              <div class="step-number">3</div>
+              <div class="step-content">Enter Amount: <strong style="font-size: 13px; color: #1976D2;">Ksh ${order.paymentStatus === 'partial' && order.remainingBalance ? order.remainingBalance.toLocaleString() : (order.totalAmount || 0).toLocaleString()}</strong></div>
+            </div>
+            <div class="mpesa-step">
+              <div class="step-number">4</div>
+              <div class="step-content">Enter your <strong>M-Pesa PIN</strong> and confirm</div>
+            </div>
+            <div class="mpesa-reference">
+              Reference: Order #${order.orderNumber}
+            </div>
           </div>
           ` : ''}
 
+          ${order.notes ? `
+          <!-- Notes -->
+          <div class="notes-box">
+            <div class="notes-title">📝 Special Instructions</div>
+            <div class="notes-content">${order.notes}</div>
+          </div>
+          ` : ''}
+
+          <!-- Footer -->
           <div class="footer">
             <div class="thank-you">Thank You for Choosing Econuru!</div>
-            <div class="contact-row">Phone: +254757883799 | Email: econuruservices@gmail.com</div>
-            <div class="mpesa-footer">
-              <div class="mpesa-footer-label">M-Pesa Till Number:</div>
-              <div class="till-number" style="font-size: 12px; margin-top: 2px;">5251257</div>
+            <div class="contact-info">
+              <div class="contact-item">
+                <span>📞</span>
+                <span>+254 757 883 799</span>
+              </div>
+              <div class="contact-item">
+                <span>✉️</span>
+                <span>econuruservices@gmail.com</span>
+              </div>
             </div>
-            <div style="margin-top: 4px; font-size: 7px; color: #999;">
-              This receipt serves as proof of order placement. Please keep it safe for order tracking.
+            <div class="mpesa-footer">
+              <div class="mpesa-footer-label">M-Pesa Till Number</div>
+              <div class="mpesa-footer-till">5251257</div>
+            </div>
+            <div class="footer-note">
+              This receipt serves as proof of order placement. Please keep it safe for order tracking and future reference.
             </div>
           </div>
         </div>
@@ -1616,39 +1916,110 @@ export default function OrdersPage() {
   };
 
   const downloadReceiptAsPDF = async (order: Order) => {
+    let jsPDF: any;
+    let html2canvas: any;
+    
     try {
-      // Dynamically import jsPDF and html2canvas
-      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
-        import('jspdf'),
-        import('html2canvas')
-      ]);
+      // Show loading toast
+      toast({
+        title: "Generating PDF",
+        description: "Please wait while we prepare your receipt...",
+      });
+
+      // Use dynamic imports - Next.js should handle these properly
+      // Import both modules separately to avoid race conditions
+      const jsPDFModule = await import('jspdf');
+      const html2canvasModule = await import('html2canvas');
+      
+      // Extract the default export or the module itself
+      jsPDF = jsPDFModule.default || jsPDFModule;
+      html2canvas = html2canvasModule.default || html2canvasModule;
+      
+      // Validate imports
+      if (!jsPDF) {
+        throw new Error('jsPDF module not loaded correctly');
+      }
+      if (!html2canvas) {
+        throw new Error('html2canvas module not loaded correctly');
+      }
+      
+    } catch (importError: any) {
+      console.error('Failed to import PDF libraries:', importError);
+      
+      // Provide helpful error message
+      const errorMsg = importError.message || importError.toString();
+      let userMessage = "Failed to load PDF generation libraries.";
+      
+      if (errorMsg.includes("Cannot find module") || errorMsg.includes("Module not found")) {
+        userMessage = "PDF libraries are not available. Please restart your development server (stop with Ctrl+C and run 'npm run dev' again) and try again.";
+      }
+      
+      toast({
+        title: "PDF Libraries Not Available",
+        description: userMessage,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Get the full HTML with styles
+      const fullHTML = generateReceiptHTML(order);
+      
+      // Extract styles from the HTML
+      const styleMatch = fullHTML.match(/<style>([\s\S]*?)<\/style>/);
+      const styles = styleMatch ? styleMatch[1] : '';
+      
+      // Extract body content
+      const bodyMatch = fullHTML.match(/<body>([\s\S]*?)<\/body>/);
+      const bodyContent = bodyMatch ? bodyMatch[1] : '';
 
       // Create a temporary container for the receipt
       const tempContainer = document.createElement('div');
       tempContainer.style.position = 'absolute';
       tempContainer.style.left = '-9999px';
       tempContainer.style.top = '0';
-      tempContainer.style.width = '400px';
+      tempContainer.style.width = '794px'; // A4 width at 96 DPI (210mm = 794px)
+      tempContainer.style.minHeight = '1123px'; // A4 height at 96 DPI (297mm = 1123px)
       tempContainer.style.background = 'white';
-      tempContainer.style.padding = '20px';
-      tempContainer.style.fontFamily = 'Courier New, monospace';
-      tempContainer.style.color = 'black';
-      tempContainer.style.border = '2px solid #000';
-      tempContainer.innerHTML = generateReceiptHTML(order).replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<head>[\s\S]*?<\/head>/g, '').replace(/<html>|<\/html>|<body>|<\/body>/g, '');
+      tempContainer.style.overflow = 'hidden';
+      
+      // Inject styles and content
+      tempContainer.innerHTML = `
+        <style>
+          ${styles}
+          .receipt {
+            width: 100%;
+            max-width: 100%;
+            padding: 15mm;
+            box-sizing: border-box;
+          }
+          .header {
+            margin: -15mm -15mm 20px -15mm;
+          }
+          .footer {
+            margin-left: -15mm;
+            margin-right: -15mm;
+            margin-bottom: -15mm;
+          }
+        </style>
+        ${bodyContent}
+      `;
 
       document.body.appendChild(tempContainer);
 
-      // Wait a bit for the content to render
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait a bit for the content to render and fonts to load
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Convert to canvas
+      // Convert to canvas with high quality
       const canvas = await html2canvas(tempContainer, {
         scale: 2,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
-        width: 400,
-        height: tempContainer.scrollHeight
+        width: tempContainer.scrollWidth,
+        height: tempContainer.scrollHeight,
+        logging: false,
       });
 
       // Remove the temporary container

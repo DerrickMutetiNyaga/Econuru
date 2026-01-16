@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
+import Customer from '@/lib/models/Customer';
 import { requireAuth } from '@/lib/auth';
 import { smsService } from '@/lib/sms';
 import Promotion from '@/lib/models/Promotion';
@@ -134,6 +135,96 @@ export async function POST(request: NextRequest) {
     });
 
     await order.save();
+
+    // Create or update customer automatically
+    try {
+      // Normalize phone number - try to find customer with any format
+      const phoneInput = orderData.customer.phone.trim();
+      const normalizedPhone = phoneInput.replace(/\D/g, "");
+      
+      // Try multiple phone formats
+      let phoneVariants = [phoneInput];
+      if (normalizedPhone.startsWith("254") && normalizedPhone.length === 12) {
+        phoneVariants.push("0" + normalizedPhone.substring(3));
+      } else if (normalizedPhone.startsWith("0") && normalizedPhone.length === 10) {
+        phoneVariants.push("254" + normalizedPhone.substring(1));
+      }
+      phoneVariants.push(normalizedPhone);
+
+      // Try to find customer with any phone format
+      let customer = await Customer.findOne({
+        $or: phoneVariants.map(p => ({ phone: p }))
+      });
+      
+      if (customer) {
+        // Update existing customer
+        customer.totalOrders = (customer.totalOrders || 0) + 1;
+        customer.totalSpent = (customer.totalSpent || 0) + (order.totalAmount || 0);
+        customer.lastOrder = new Date();
+        // Update customer details if provided and different
+        if (orderData.customer.name && orderData.customer.name !== customer.name) {
+          customer.name = orderData.customer.name;
+        }
+        if (orderData.customer.email && orderData.customer.email !== customer.email) {
+          customer.email = orderData.customer.email;
+        }
+        if (orderData.customer.address && orderData.customer.address !== customer.address) {
+          customer.address = orderData.customer.address;
+        }
+        await customer.save();
+        console.log(`✅ Updated existing customer: ${customer.name} (${customer.phone})`);
+      } else {
+        // Create new customer - normalize phone to 0 format for consistency
+        const phoneToStore = normalizedPhone.startsWith("254") && normalizedPhone.length === 12
+          ? "0" + normalizedPhone.substring(3)
+          : normalizedPhone.startsWith("0")
+          ? normalizedPhone
+          : "0" + normalizedPhone;
+        
+        customer = await Customer.create({
+          name: orderData.customer.name,
+          phone: phoneToStore,
+          email: orderData.customer.email || '',
+          address: orderData.customer.address || '',
+          totalOrders: 1,
+          totalSpent: order.totalAmount || 0,
+          lastOrder: new Date(),
+          status: 'active',
+          preferences: [],
+        });
+        console.log(`✅ Created new customer: ${customer.name} (${customer.phone})`);
+      }
+    } catch (customerError: any) {
+      // Don't fail order creation if customer creation/update fails
+      console.error('Error creating/updating customer:', customerError);
+      // If it's a duplicate key error, try to find and update existing customer
+      if (customerError.code === 11000) {
+        try {
+          const phoneInput = orderData.customer.phone.trim();
+          const normalizedPhone = phoneInput.replace(/\D/g, "");
+          let phoneVariants = [phoneInput];
+          if (normalizedPhone.startsWith("254") && normalizedPhone.length === 12) {
+            phoneVariants.push("0" + normalizedPhone.substring(3));
+          } else if (normalizedPhone.startsWith("0") && normalizedPhone.length === 10) {
+            phoneVariants.push("254" + normalizedPhone.substring(1));
+          }
+          phoneVariants.push(normalizedPhone);
+          
+          const existingCustomer = await Customer.findOne({
+            $or: phoneVariants.map(p => ({ phone: p }))
+          });
+          if (existingCustomer) {
+            existingCustomer.totalOrders = (existingCustomer.totalOrders || 0) + 1;
+            existingCustomer.totalSpent = (existingCustomer.totalSpent || 0) + (order.totalAmount || 0);
+            existingCustomer.lastOrder = new Date();
+            await existingCustomer.save();
+            console.log(`✅ Updated existing customer after duplicate error: ${existingCustomer.name}`);
+          }
+        } catch (updateError) {
+          console.error('Error updating customer after duplicate error:', updateError);
+        }
+      }
+    }
 
     // Send SMS confirmation
     try {

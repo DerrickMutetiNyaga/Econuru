@@ -22,8 +22,22 @@ export async function GET(request: NextRequest) {
         ]
       };
     } else if (phone) {
-      // Search by exact phone number
-      query = { phone: phone };
+      // Normalize phone number for flexible matching
+      const normalizedPhone = phone.replace(/\D/g, "");
+      let phoneVariants = [phone.trim()]; // Original
+      
+      // Add normalized variants
+      if (normalizedPhone.startsWith("254") && normalizedPhone.length === 12) {
+        phoneVariants.push("0" + normalizedPhone.substring(3));
+      } else if (normalizedPhone.startsWith("0") && normalizedPhone.length === 10) {
+        phoneVariants.push("254" + normalizedPhone.substring(1));
+      }
+      phoneVariants.push(normalizedPhone);
+      
+      // Search by phone number (try multiple formats)
+      query = { 
+        $or: phoneVariants.map(p => ({ phone: p }))
+      };
     }
     
     const customers = await Customer.find(query)
