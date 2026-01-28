@@ -7,6 +7,7 @@ import { WhatsAppWidget } from "@/components/whatsapp-widget"
 import { AuthProvider } from "@/hooks/useAuth"
 import { Toaster } from "@/components/ui/toaster"
 import { PWASetup } from "@/components/pwa-setup"
+import { PWARoutingGuard } from "@/components/pwa-routing-guard"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -58,6 +59,7 @@ export default function RootLayout({
       <body className={`${inter.variable} ${poppins.variable} ${playfair.variable} ${spaceGrotesk.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <AuthProvider>
+            <PWARoutingGuard />
             {children}
             <WhatsAppWidget />
             <Toaster />

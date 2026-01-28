@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion"
@@ -376,6 +377,29 @@ const EconuruPreloader = ({ isLoading }: { isLoading: boolean }) => {
 }
 
 export default function Home() {
+  const router = useRouter()
+
+  // Enforce client app routing if installed as client app
+  useEffect(() => {
+    // Check if app is installed and enforce client routing
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      const installContext = localStorage.getItem('pwa-install-context')
+      // If installed as admin app, redirect to admin login
+      if (installContext === 'admin') {
+        router.replace('/admin/login')
+        return
+      }
+      // If installed as client app, ensure we're not on admin pages
+      if (installContext === 'client' && window.location.pathname.startsWith('/admin')) {
+        router.replace('/')
+        return
+      }
+      // If no context but in standalone mode on client page, set as client
+      if (!window.location.pathname.startsWith('/admin')) {
+        localStorage.setItem('pwa-install-context', 'client')
+      }
+    }
+  }, [router])
   const [scrollY, setScrollY] = useState(0)
   const [featuredServices, setFeaturedServices] = useState<Service[]>([])
   const [isLoadingServices, setIsLoadingServices] = useState(true)

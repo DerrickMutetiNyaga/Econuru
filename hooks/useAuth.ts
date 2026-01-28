@@ -128,16 +128,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setToken(null);
     
-    // Clear localStorage
+    // Clear localStorage (but keep PWA install context)
     localStorage.removeItem('authToken');
     localStorage.removeItem('authUser');
     
     // Dispatch a custom event to notify all components about logout
     window.dispatchEvent(new CustomEvent('auth:logout'));
     
-    // Force immediate redirect to login page
-    // Using window.location.href ensures immediate navigation without React router delays
-    window.location.href = '/admin/login';
+    // Determine redirect based on PWA installation context
+    const installContext = localStorage.getItem('pwa-install-context');
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    
+    // If installed as admin app, always redirect to admin login
+    if (isStandalone && installContext === 'admin') {
+      window.location.href = '/admin/login';
+    } else {
+      // Default to admin login for web access
+      window.location.href = '/admin/login';
+    }
   };
 
   // Add global logout event listener

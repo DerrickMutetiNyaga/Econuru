@@ -14,15 +14,36 @@ export function AdminPWASetup() {
     // Check if app is already installed
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true)
+      // Store admin installation context
+      localStorage.setItem('pwa-install-context', 'admin')
+      // Enforce admin routing - redirect to admin login if on client pages
+      if (!window.location.pathname.startsWith('/admin')) {
+        window.location.href = '/admin/login'
+      }
       return
+    }
+
+    // Unregister client service worker if it exists
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((registration) => {
+          if (registration.scope.includes('/sw.js') && !registration.scope.includes('/admin')) {
+            registration.unregister().then(() => {
+              console.log('PWA (Admin): Unregistered client service worker')
+            })
+          }
+        })
+      })
     }
 
     // Register admin service worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
-        .register('/sw-admin.js')
+        .register('/sw-admin.js', { scope: '/admin/' })
         .then((registration) => {
           console.log('PWA (Admin): Service Worker registered')
+          // Store admin installation context
+          localStorage.setItem('pwa-install-context', 'admin')
         })
         .catch((error) => {
           console.log('PWA (Admin): Service Worker registration failed', error)
@@ -40,6 +61,10 @@ export function AdminPWASetup() {
       setShowInstallButton(false)
       setDeferredPrompt(null)
       setIsInstalled(true)
+      // Store admin installation context
+      localStorage.setItem('pwa-install-context', 'admin')
+      // Redirect to admin login after installation
+      window.location.href = '/admin/login'
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
