@@ -31,14 +31,16 @@ function AdminLoginForm() {
     }
   }, [searchParams])
 
-  // Enforce admin app routing if installed as admin app
+  // Enforce admin app routing ONLY if installed as admin app (standalone mode)
   React.useEffect(() => {
-    // Check if app is installed and enforce admin routing
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    // Only enforce in standalone mode (installed PWA), not in regular web browsing
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    
+    if (isStandalone) {
       const installContext = localStorage.getItem('pwa-install-context')
       // If installed as admin app, ensure we're on admin pages
       if (installContext === 'admin' && !window.location.pathname.startsWith('/admin')) {
-        router.replace('/admin/login')
+        router.replace('/admin')
         return
       }
       // If installed as client app, redirect away from admin

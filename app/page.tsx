@@ -379,14 +379,16 @@ const EconuruPreloader = ({ isLoading }: { isLoading: boolean }) => {
 export default function Home() {
   const router = useRouter()
 
-  // Enforce client app routing if installed as client app
+  // Enforce client app routing ONLY if installed as client app (standalone mode)
   useEffect(() => {
-    // Check if app is installed and enforce client routing
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    // Only enforce in standalone mode (installed PWA), not in regular web browsing
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    
+    if (isStandalone) {
       const installContext = localStorage.getItem('pwa-install-context')
-      // If installed as admin app, redirect to admin login
+      // If installed as admin app, redirect to admin
       if (installContext === 'admin') {
-        router.replace('/admin/login')
+        router.replace('/admin')
         return
       }
       // If installed as client app, ensure we're not on admin pages

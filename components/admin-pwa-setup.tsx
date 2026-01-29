@@ -11,14 +11,17 @@ export function AdminPWASetup() {
   const [isInstalled, setIsInstalled] = useState(false)
 
   useEffect(() => {
-    // Check if app is already installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    // Check if app is already installed (standalone mode)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    
+    if (isStandalone) {
       setIsInstalled(true)
       // Store admin installation context
       localStorage.setItem('pwa-install-context', 'admin')
-      // Enforce admin routing - redirect to admin login if on client pages
+      // Enforce admin routing - redirect to admin if on client pages
+      // Only in standalone mode, not in regular web browsing
       if (!window.location.pathname.startsWith('/admin')) {
-        window.location.href = '/admin/login'
+        window.location.href = '/admin'
       }
       return
     }
@@ -42,8 +45,10 @@ export function AdminPWASetup() {
         .register('/sw-admin.js', { scope: '/admin/' })
         .then((registration) => {
           console.log('PWA (Admin): Service Worker registered')
-          // Store admin installation context
-          localStorage.setItem('pwa-install-context', 'admin')
+          // Only store admin installation context if in standalone mode
+          if (window.matchMedia('(display-mode: standalone)').matches) {
+            localStorage.setItem('pwa-install-context', 'admin')
+          }
         })
         .catch((error) => {
           console.log('PWA (Admin): Service Worker registration failed', error)
@@ -63,8 +68,8 @@ export function AdminPWASetup() {
       setIsInstalled(true)
       // Store admin installation context
       localStorage.setItem('pwa-install-context', 'admin')
-      // Redirect to admin login after installation
-      window.location.href = '/admin/login'
+      // Redirect to admin after installation (ProtectedRoute will handle login redirect if needed)
+      window.location.href = '/admin'
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)

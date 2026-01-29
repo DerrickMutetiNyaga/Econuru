@@ -10,7 +10,24 @@ export function PWARoutingGuard() {
 
   useEffect(() => {
     // Only enforce in standalone mode (installed app)
-    if (!window.matchMedia('(display-mode: standalone)').matches) {
+    // Don't interfere with regular web browsing
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    
+    // Clear install context if not in standalone mode (shouldn't be set during web browsing)
+    // This ensures regular web browsing isn't affected by stale localStorage values
+    if (!isStandalone) {
+      // Clear any install context that might have been set incorrectly
+      const installContext = localStorage.getItem('pwa-install-context')
+      if (installContext) {
+        // Only clear if we're definitely not in standalone mode
+        // Use a small delay to avoid race conditions
+        const timeoutId = setTimeout(() => {
+          if (!window.matchMedia('(display-mode: standalone)').matches) {
+            localStorage.removeItem('pwa-install-context')
+          }
+        }, 100)
+        return () => clearTimeout(timeoutId)
+      }
       return
     }
 
@@ -18,9 +35,9 @@ export function PWARoutingGuard() {
 
     // If installed as admin app
     if (installContext === 'admin') {
-      // Redirect to admin login if trying to access client pages
+      // Redirect to admin if trying to access client pages
       if (!pathname?.startsWith('/admin')) {
-        router.replace('/admin/login')
+        router.replace('/admin')
       }
     }
     // If installed as client app

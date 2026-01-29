@@ -14,12 +14,13 @@ export function PWASetup() {
       return
     }
 
-    // Check if app is installed as admin app
+    // Only check and redirect if in standalone mode (installed app)
+    // Don't interfere with regular web browsing
     if (window.matchMedia('(display-mode: standalone)').matches) {
       const installContext = localStorage.getItem('pwa-install-context')
       if (installContext === 'admin') {
         // Redirect to admin if installed as admin app
-        window.location.href = '/admin/login'
+        window.location.href = '/admin'
         return
       }
     }
@@ -42,8 +43,10 @@ export function PWASetup() {
         .register('/sw.js')
         .then((registration) => {
           console.log('PWA: Service Worker registered')
-          // Store client installation context
-          localStorage.setItem('pwa-install-context', 'client')
+          // Only store client installation context if in standalone mode
+          if (window.matchMedia('(display-mode: standalone)').matches) {
+            localStorage.setItem('pwa-install-context', 'client')
+          }
         })
         .catch((error) => {
           console.log('PWA: Service Worker registration failed')
@@ -52,7 +55,7 @@ export function PWASetup() {
 
     // Handle app installed event
     const handleAppInstalled = () => {
-      // Store client installation context
+      // Store client installation context only when app is actually installed
       localStorage.setItem('pwa-install-context', 'client')
     }
 

@@ -32,23 +32,15 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-// Client fetch handler - enforces client-only access
+// Client fetch handler
+// Note: Routing enforcement is handled by client-side components, not service worker
+// This service worker only handles caching and offline functionality
 self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (event.request.method !== 'GET') return
   
-  const url = new URL(event.request.url)
-  const isAdminRequest = url.pathname.startsWith('/admin')
-  
-  // Enforce client-only access - redirect admin navigation requests
-  if (event.request.mode === 'navigate' && isAdminRequest) {
-    event.respondWith(
-      Response.redirect(new URL('/', event.request.url), 302)
-    )
-    return
-  }
-  
-  // Let all client requests go through normally
+  // Let all requests go through normally
+  // Routing enforcement is handled by client-side components
   event.respondWith(
     fetch(event.request).catch(() => {
       // Only for navigation requests, show a simple offline message

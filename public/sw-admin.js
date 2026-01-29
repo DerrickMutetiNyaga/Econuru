@@ -38,20 +38,14 @@ self.addEventListener('activate', (event) => {
 })
 
 // Cache admin pages and assets
+// Note: Routing enforcement is handled by client-side components, not service worker
+// This service worker only handles caching and offline functionality
 self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (event.request.method !== 'GET') return
   
   const url = new URL(event.request.url)
   const isAdminRequest = url.pathname.startsWith(ADMIN_SCOPE)
-  
-  // Enforce admin-only access - redirect non-admin navigation requests
-  if (event.request.mode === 'navigate' && !isAdminRequest) {
-    event.respondWith(
-      Response.redirect(new URL('/admin/login', event.request.url), 302)
-    )
-    return
-  }
   
   // Only cache admin-related requests
   if (isAdminRequest) {
@@ -106,14 +100,9 @@ self.addEventListener('fetch', (event) => {
       })
     )
   } else {
-    // For non-admin requests, redirect to admin login
-    if (event.request.mode === 'navigate') {
-      event.respondWith(
-        Response.redirect(new URL('/admin/login', event.request.url), 302)
-      )
-    } else {
-      event.respondWith(fetch(event.request))
-    }
+    // For non-admin requests, just pass through normally
+    // Routing enforcement is handled by client-side components
+    event.respondWith(fetch(event.request))
   }
 })
 

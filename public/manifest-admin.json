@@ -2,7 +2,7 @@
   "name": "Econuru Admin Panel",
   "short_name": "Econuru Admin",
   "description": "Admin panel for Econuru Laundry Services management",
-  "start_url": "/admin/login",
+  "start_url": "/admin",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#6366f1",
